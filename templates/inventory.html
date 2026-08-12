@@ -247,6 +247,18 @@
                     </div>
                 </div>
                 <hr class="inv-section-sep">
+                <div class="inv-form-row">
+                    <div class="inv-form-group">
+                        <label for="invQtyOnHand">Quantity on Hand <span class="req">*</span></label>
+                        <input type="number" id="invQtyOnHand" class="inv-form-control" min="0" step="1" value="0" required>
+                        <span class="inv-field-error" id="invQtyOnHandErr"><i class="fa-solid fa-circle-exclamation"></i></span>
+                    </div>
+                    <div class="inv-form-group">
+                        <label for="invQtyOnStore">Quantity on Store <span class="req">*</span></label>
+                        <input type="number" id="invQtyOnStore" class="inv-form-control" min="0" step="1" value="0" required>
+                        <span class="inv-field-error" id="invQtyOnStoreErr"><i class="fa-solid fa-circle-exclamation"></i></span>
+                    </div>
+                </div>
                 <div class="inv-section-label">Designate Store <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(optional)</span></div>
                 <div class="inv-form-group" style="margin-bottom:1rem;">
                     <label for="invStoreAssign">Assign to Store</label>
@@ -319,6 +331,6 @@ function toggleInvTheme(){
     if(btn) btn.title=next==='dark'?'Switch to light mode':'Switch to dark mode';
 }
 </script>
-<script src="{{ url_for('static', filename='js/inventory.js') }}?v=2.0"></script>
+<script src="{{ url_for('static', filename='js/inventory.js') }}?v=2.2"></script>
 </body>
 </html>

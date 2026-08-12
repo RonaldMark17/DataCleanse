@@ -675,7 +675,7 @@ function renderInventoryTable() {
                     <button class="btn-inv-edit" onclick="openEditInvModal(${r.inv_id ? r.inv_id : r.id})" title="Edit quantities">
                         <i class="fa-solid fa-pen"></i> Edit
                     </button>
-                    <button class="btn-inv-delete" onclick="confirmDeleteInv(${r.id})" title="Remove">
+                    <button class="btn-inv-delete" onclick="confirmDeleteInv(${r.inv_id ? r.inv_id : r.id})" title="Remove">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
@@ -1091,21 +1091,26 @@ function confirmDeleteInv(invId) {
     const normId = normalizeInvId(invId);
     const rec = Array.isArray(INV.inventory) ? INV.inventory.find(r => String(r.id) === String(normId) || String(r.inv_id) === String(normId) || String(r.id) === String(invId) || String(r.inv_id) === String(invId)) : null;
     if (!rec) return;
+    const deletingCatalogItem = !INV.selectedStoreId;
     showConfirm(
-        'Remove Item',
-        `Remove <strong>${escHtml(rec.name)}</strong> from this store?<br><small>The item itself will not be deleted — only its inventory record for this store.</small>`,
+        deletingCatalogItem ? 'Delete Item' : 'Remove Item',
+        deletingCatalogItem
+            ? `Permanently delete <strong>${escHtml(rec.name)}</strong>?<br><small>This also removes its inventory records from every store.</small>`
+            : `Remove <strong>${escHtml(rec.name)}</strong> from this store?<br><small>The item itself will remain in the catalog.</small>`,
         'danger',
         async () => {
             try {
-                const targetId = normId || invId;
-                const res = await fetch(`/api/inventory/store-inventory/${targetId}`, { method: 'DELETE' });
+                const endpoint = deletingCatalogItem
+                    ? `/api/inventory/items/${rec.id}`
+                    : `/api/inventory/store-inventory/${normId || invId}`;
+                const res = await fetch(endpoint, { method: 'DELETE' });
                 const data = await res.json();
                 if (!res.ok) {
                     invToast(data.error || 'Delete failed.', 'error');
                 } else {
-                    invToast('Item removed from inventory.', 'success');
+                    invToast(deletingCatalogItem ? 'Item deleted.' : 'Item removed from this store.', 'success');
+                    await loadItems();
                     INV.selectedStoreId ? loadInventory(INV.selectedStoreId) : loadAllItems();
-                    updateStats();
                 }
             } catch (e) {
                 invToast('Network error.', 'error');
