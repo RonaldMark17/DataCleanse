@@ -1,0 +1,35 @@
+<!-- Top Navigation Header -->
+<header class="app-header">
+    <div class="brand-area">
+        <div class="logo-icon">
+            <i class="fa-solid fa-chart-simple"></i>
+        </div>
+        <div class="brand-text">
+            <h1>DataCleanse <span class="badge-pro">Studio</span></h1>
+            <p>Data Validation, Correlation Matrix & Trend Analytics</p>
+        </div>
+    </div>
+
+    <div class="header-controls">
+        <div class="dataset-pill" id="datasetPill">
+            <i class="fa-solid fa-database"></i>
+            <span id="activeDatasetName">No File Uploaded</span>
+            <span class="row-tag" id="activeDatasetRows">0 Rows</span>
+            <button type="button" class="btn-remove-pill" id="btnRemoveDataset" onclick="confirmClearDataset()" title="Remove Imported File" style="display: none;">
+                <i class="fa-solid fa-trash-can"></i> Remove
+            </button>
+        </div>
+
+        <button type="button" class="btn btn-outline" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light / Dark Mode">
+            <i class="fa-solid fa-moon" id="themeIcon"></i>
+            <span id="themeText">Dark</span>
+        </button>
+
+        <div class="sample-actions">
+            <label for="fileUploadInput" class="btn btn-primary btn-lg">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Import Excel / CSV
+            </label>
+            <input type="file" id="fileUploadInput" accept=".csv, .xlsx, .xls" style="display:none" onchange="handleFileUpload(event)">
+        </div>
+    </div>
+</header>

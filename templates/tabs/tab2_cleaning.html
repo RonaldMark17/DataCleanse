@@ -1,0 +1,61 @@
+<!-- TAB CONTENT 2: DATA CLEANING -->
+<section id="tab-cleaning" class="tab-content">
+    <!-- Prominent 1-Click Auto-Clean Banner -->
+    <div class="auto-clean-box mb-4">
+        <div class="auto-clean-text">
+            <h4><i class="fa-solid fa-wand-magic-sparkles text-amber"></i> 1-Click Auto-Clean Dataset (Recommended)</h4>
+            <p>Automatically removes exact duplicate rows, fills missing values with averages, and smooths extreme outliers instantly.</p>
+        </div>
+        <button type="button" class="btn btn-emerald btn-lg" onclick="triggerAutoClean()">
+            <i class="fa-solid fa-bolt"></i> Auto-Clean My Data Now
+        </button>
+    </div>
+
+    <div class="dashboard-row">
+        <!-- Data Cleaning Controls -->
+        <div class="panel panel-left">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-sliders"></i> Custom Cleaning Options</h3>
+            </div>
+            <div class="panel-body">
+                <form id="cleaningForm" onsubmit="applyDataCleaning(event)">
+                    <div class="form-group mb-4">
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="chkRemoveDuplicates" checked>
+                            <span>Remove Duplicate Rows</span>
+                        </label>
+                        <span class="form-help mt-2">Deletes exact repeated rows in your file.</span>
+                    </div>
+
+                    <div class="form-section-title">Fill Missing Values per Column</div>
+                    <div id="missingStrategiesContainer" class="strategies-list">
+                        <!-- Populated dynamically per column -->
+                    </div>
+
+                    <div class="form-section-title mt-4">Smooth Extreme Outlier Numbers</div>
+                    <div id="outlierClippingContainer" class="checkbox-group">
+                        <!-- Populated dynamically for numeric columns -->
+                    </div>
+
+                    <div class="mt-4 pt-3 text-right">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fa-solid fa-play"></i> Apply Custom Fixes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Cleaning History Audit Log -->
+        <div class="panel panel-right">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-clock-rotate-left"></i> Fix History Log</h3>
+            </div>
+            <div class="panel-body">
+                <ul id="cleaningLogList" class="audit-log-list">
+                    <li>No cleaning actions executed yet.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>

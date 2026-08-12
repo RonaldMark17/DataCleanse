@@ -1,0 +1,135 @@
+<!-- TAB CONTENT 4: DEMOGRAPHICS & VISUAL TRENDS -->
+<section id="tab-survival" class="tab-content">
+    <div class="dashboard-row">
+        <!-- Data Trend Controls -->
+        <div class="panel panel-left-sm">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-sliders"></i> Data Trend Controls</h3>
+            </div>
+            <div class="panel-body">
+                <form id="trendForm" onsubmit="computeTrendAnalysis(event)">
+                    <div class="form-group mb-4">
+                        <label for="selTrendXCol">X-Axis Category / Time Attribute:</label>
+                        <select id="selTrendXCol" class="form-control" onchange="computeTrendAnalysis(event)"></select>
+                        <span class="form-help">e.g. Day, Month, Date, ID, Category</span>
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <label for="selTrendYCol">Y-Axis Metric Attribute:</label>
+                        <select id="selTrendYCol" class="form-control" onchange="computeTrendAnalysis(event)"></select>
+                        <span class="form-help">e.g. Ice Cream Sales, Revenue, Rating</span>
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <label for="selTrendAgg">Aggregation Strategy:</label>
+                        <select id="selTrendAgg" class="form-control" onchange="computeTrendAnalysis(event)">
+                            <option value="sum">Sum / Total</option>
+                            <option value="mean">Average / Mean</option>
+                            <option value="count">Count of Records</option>
+                            <option value="min">Minimum Value</option>
+                            <option value="max">Maximum Value</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <label for="selTrendChartType">Plot Visual Type:</label>
+                        <select id="selTrendChartType" class="form-control" onchange="renderTrendChart()">
+                            <option value="line">Line Trend Chart</option>
+                            <option value="bar">Bar Chart</option>
+                            <option value="area">Area Chart</option>
+                        </select>
+                    </div>
+                </form>
+
+                <div class="survival-summary-card mt-4" id="trendMetricsCard">
+                    <h4>Trend Summary</h4>
+                    <div class="stat-row">
+                        <span>Records Analyzed:</span>
+                        <strong id="statTrendN">--</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span>Aggregated Total:</span>
+                        <strong id="statTrendTotal">--</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span>Average Metric:</span>
+                        <strong id="statTrendAvg">--</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visual Data Trend Chart -->
+        <div class="panel panel-right-lg">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-chart-line text-indigo"></i> Visual Data Trend Plot</h3>
+                <button type="button" class="btn btn-xs btn-outline" onclick="downloadTrendPlotImage()">
+                    <i class="fa-solid fa-download"></i> Download Plot (PNG)
+                </button>
+            </div>
+            <div class="panel-body">
+                <div style="height: 340px; position: relative;">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demographic Stats & Categorical Distributions -->
+    <div class="panel mt-4">
+        <div class="panel-header" style="flex-wrap: wrap; gap: 16px;">
+            <h3><i class="fa-solid fa-chart-pie"></i> Demographic Distributions & Statistics</h3>
+            
+            <div class="controls-group" style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+                <div class="form-group-inline">
+                    <label style="font-size:0.85rem; color:var(--text-secondary); margin-right:6px;">Demographic Attribute:</label>
+                    <select id="selDemographicCol" class="form-control-sm" onchange="renderSelectedDemographics()">
+                        <option value="all">Show All Categories</option>
+                    </select>
+                </div>
+
+                <div class="form-group-inline">
+                    <label style="font-size:0.85rem; color:var(--text-secondary); margin-right:6px;">Chart Visual:</label>
+                    <select id="selDemographicChartType" class="form-control-sm" onchange="renderSelectedDemographics()">
+                        <option value="doughnut">Donut Chart</option>
+                        <option value="pie">Pie Chart</option>
+                        <option value="bar">Bar Chart</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div id="demographicsChartsGrid" class="demographics-grid">
+                <!-- Populated dynamically -->
+            </div>
+
+            <!-- Numeric Demographics Summary Table -->
+            <div class="mt-4 pt-4" style="border-top: 1px solid var(--border-color);">
+                <h4 style="font-size: 1rem; font-weight: 700; margin-bottom: 16px;">
+                    <i class="fa-solid fa-calculator text-blue"></i> Numeric Demographic Metrics Summary
+                </h4>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Attribute</th>
+                                <th>Count</th>
+                                <th>Mean</th>
+                                <th>Std Dev</th>
+                                <th>Median</th>
+                                <th>Min</th>
+                                <th>Max</th>
+                                <th>25% Quantile</th>
+                                <th>75% Quantile</th>
+                                <th>Skewness</th>
+                            </tr>
+                        </thead>
+                        <tbody id="numericSummaryTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

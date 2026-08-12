@@ -1,0 +1,110 @@
+<!-- TAB CONTENT 1: OVERVIEW & DATA AUDIT -->
+<section id="tab-overview" class="tab-content active">
+    <!-- Central Upload Dropzone Hero Card (Visible when no dataset loaded) -->
+    <div id="uploadDropzoneHero" class="upload-hero-card mb-4" onclick="triggerFileInput()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="upload-hero-icon">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+        </div>
+        <h2>Import Excel or CSV File</h2>
+        <p>Drag & drop your file here, or click to browse files</p>
+        <div class="upload-formats">
+            <span class="format-badge"><i class="fa-solid fa-file-excel text-emerald"></i> Excel (.xlsx, .xls)</span>
+            <span class="format-badge"><i class="fa-solid fa-file-csv text-blue"></i> CSV (.csv)</span>
+        </div>
+    </div>
+
+    <!-- Top Summary Cards Grid -->
+    <div class="metrics-grid" id="metricsGridArea">
+        <div class="metric-card">
+            <div class="card-icon bg-indigo"><i class="fa-solid fa-list-ol"></i></div>
+            <div class="card-info">
+                <span class="card-label">Total Rows / Records</span>
+                <h3 id="statTotalRows">0</h3>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="card-icon bg-blue"><i class="fa-solid fa-columns"></i></div>
+            <div class="card-info">
+                <span class="card-label">Total Columns</span>
+                <h3 id="statTotalCols">0</h3>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="card-icon bg-amber"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="card-info">
+                <span class="card-label">Empty / Missing Cells</span>
+                <h3 id="statMissingCells">0</h3>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="card-icon bg-rose"><i class="fa-solid fa-clone"></i></div>
+            <div class="card-info">
+                <span class="card-label">Duplicate Rows</span>
+                <h3 id="statDuplicateRows">0</h3>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="card-icon bg-emerald"><i class="fa-solid fa-shield-heart"></i></div>
+            <div class="card-info">
+                <span class="card-label">Data Quality Score</span>
+                <h3 id="statQualityScore">--%</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Two Column Section: Insights & Audit Table -->
+    <div class="dashboard-row">
+        <div class="panel panel-left">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-lightbulb text-amber"></i> Automated Insights & Summary</h3>
+            </div>
+            <div class="panel-body">
+                <div id="insightsContainer" class="insights-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-right">
+            <div class="panel-header">
+                <h3><i class="fa-solid fa-chart-column"></i> Missing Values Breakdown</h3>
+                <span id="missingSummaryBadge" class="format-badge"><i class="fa-solid fa-circle-check text-emerald"></i> 0 Missing</span>
+            </div>
+            <div class="panel-body">
+                <p class="section-help-text mb-3">Number of empty missing values in each column:</p>
+                <div style="height: 240px; position: relative;">
+                    <canvas id="missingValuesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Column Audit Table -->
+    <div class="panel mt-4">
+        <div class="panel-header">
+            <h3><i class="fa-solid fa-stethoscope"></i> Column-by-Column Data Health</h3>
+        </div>
+        <div class="panel-body table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Column Name</th>
+                        <th>Type</th>
+                        <th>Missing Values</th>
+                        <th>Missing %</th>
+                        <th>Unique Values</th>
+                        <th>Extreme Values</th>
+                        <th>Sample Preview</th>
+                    </tr>
+                </thead>
+                <tbody id="auditTableBody">
+                    <!-- Populated dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

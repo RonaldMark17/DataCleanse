@@ -1,0 +1,46 @@
+<!-- TAB CONTENT 5: RECORD EXPLORER & EXPORT -->
+<section id="tab-explorer" class="tab-content">
+    <div class="table-controls-bar mb-4">
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="recordSearchInput" placeholder="Search across records..." onkeyup="handleSearchKeyUp(event)">
+        </div>
+
+        <div class="export-buttons">
+            <a href="/api/export/csv" class="btn btn-outline">
+                <i class="fa-solid fa-file-csv"></i> Export Clean CSV
+            </a>
+            <a href="/api/export/pdf" target="_blank" class="btn btn-primary">
+                <i class="fa-solid fa-file-pdf"></i> Export PDF Report
+            </a>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-body p-0">
+            <div class="table-responsive" style="max-height: 520px; overflow: auto;">
+                <table class="data-table">
+                    <thead id="recordsTableHeader">
+                        <!-- Populated dynamically -->
+                    </thead>
+                    <tbody id="recordsTableBody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="panel-footer pagination-bar">
+            <div class="pagination-info">
+                Showing page <span id="lblPage">1</span> of <span id="lblTotalPages">1</span> (<span id="lblTotalRecords">0</span> records total)
+            </div>
+            <div class="pagination-buttons">
+                <button class="btn btn-xs btn-outline" id="btnPrevPage" onclick="changePage(-1)">
+                    <i class="fa-solid fa-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-xs btn-outline" id="btnNextPage" onclick="changePage(1)">
+                    Next <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</section>

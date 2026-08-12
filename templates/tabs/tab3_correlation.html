@@ -1,0 +1,39 @@
+<!-- TAB CONTENT 3: CORRELATION MATRIX -->
+<section id="tab-correlation" class="tab-content">
+    <div class="controls-bar mb-4">
+        <div class="bar-title">
+            <i class="fa-solid fa-diagram-project"></i> Numerical Covariance & Correlation Matrix
+        </div>
+        <div class="bar-controls">
+            <label>Method:</label>
+            <select id="corrMethodSelect" class="form-control-sm" onchange="loadCorrelationMatrix()">
+                <option value="pearson">Pearson (Linear)</option>
+                <option value="spearman">Spearman (Rank Correlation)</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="dashboard-row">
+        <div class="panel panel-left-lg">
+            <div class="panel-header">
+                <h3>Interactive Correlation Heatmap</h3>
+            </div>
+            <div class="panel-body flex-center" style="min-height: 420px;">
+                <div id="heatmapGridContainer" class="heatmap-grid-wrapper">
+                    <!-- Dynamic Heatmap Rendered Here -->
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-right-sm">
+            <div class="panel-header">
+                <h3>Top Correlated Pairs</h3>
+            </div>
+            <div class="panel-body">
+                <div id="topCorrelationsContainer" class="correlation-pairs-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
