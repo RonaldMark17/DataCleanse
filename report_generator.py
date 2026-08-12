@@ -12,7 +12,7 @@ from analytics_engine import AnalyticsEngine
 
 class ExecutivePDFReportGenerator:
     @staticmethod
-    def _render_trend_chart_image(df: pd.DataFrame) -> bytes:
+    def _render_trend_chart_image(df: pd.DataFrame) -> tuple:
         try:
             import matplotlib
             matplotlib.use('Agg')
@@ -22,14 +22,14 @@ class ExecutivePDFReportGenerator:
             num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c]) and not pd.api.types.is_bool_dtype(df[c])]
 
             if not all_cols or not num_cols:
-                return None
+                return None, None
 
             x_col = all_cols[0]
             y_col = num_cols[0] if num_cols[0] != x_col and len(num_cols) > 1 else (num_cols[0] if len(all_cols) > 1 else all_cols[0])
 
             trend = AnalyticsEngine.compute_trend_analysis(df, x_col, y_col, aggregation='sum')
             if 'error' in trend or not trend.get('data'):
-                return None
+                return None, None
 
             x_vals = [str(d['x']) for d in trend['data']]
             y_vals = [d['y'] for d in trend['data']]
@@ -58,10 +58,20 @@ class ExecutivePDFReportGenerator:
             plt.savefig(buf, format='png', bbox_inches='tight', transparent=False, facecolor='#ffffff')
             plt.close(fig)
             buf.seek(0)
-            return buf.getvalue()
+
+            summary_meta = {
+                "x_col": x_col,
+                "y_col": y_col,
+                "aggregation": trend.get('aggregation', 'sum'),
+                "sample_size": trend.get('sample_size', len(df)),
+                "total_value": trend.get('total_value', 0),
+                "average_value": trend.get('average_value', 0)
+            }
+
+            return buf.getvalue(), summary_meta
         except Exception as e:
             print(f"Trend plot render error: {e}")
-            return None
+            return None, None
 
     @staticmethod
     def _render_demographics_chart_images(df: pd.DataFrame) -> list:
@@ -251,10 +261,34 @@ class ExecutivePDFReportGenerator:
             story.append(Paragraph("No specific data anomalies detected.", body_style))
         story.append(Spacer(1, 10))
 
-        # 3. Visual Data Trend Plot Chart
-        trend_bytes = ExecutivePDFReportGenerator._render_trend_chart_image(df)
+        # 3. Visual Data Trend Plot Analytics & Trend Summary Card
+        trend_bytes, trend_summary = ExecutivePDFReportGenerator._render_trend_chart_image(df)
         if trend_bytes:
-            story.append(Paragraph("Visual Data Trend Plot Analytics", heading_style))
+            story.append(Paragraph("Visual Data Trend Plot Analytics & Trend Summary", heading_style))
+
+            if trend_summary:
+                trend_meta_data = [
+                    [
+                        Paragraph(f"<b>X-Axis Attribute:</b> {trend_summary['x_col']}", body_style),
+                        Paragraph(f"<b>Y-Axis Metric:</b> {trend_summary['y_col']}", body_style),
+                        Paragraph(f"<b>Strategy:</b> {trend_summary['aggregation'].upper()}", body_style)
+                    ],
+                    [
+                        Paragraph(f"<b>Records Analyzed:</b> {trend_summary['sample_size']:,}", body_style),
+                        Paragraph(f"<b>Aggregated Total:</b> {trend_summary['total_value']:,}", body_style),
+                        Paragraph(f"<b>Average Metric:</b> {trend_summary['average_value']:,}", body_style)
+                    ]
+                ]
+                trend_meta_table = Table(trend_meta_data, colWidths=[175, 175, 170])
+                trend_meta_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#eef2ff')),
+                    ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#c7d2fe')),
+                    ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e0e7ff')),
+                    ('PADDING', (0,0), (-1,-1), 5),
+                ]))
+                story.append(trend_meta_table)
+                story.append(Spacer(1, 6))
+
             img_trend = Image(io.BytesIO(trend_bytes), width=515, height=185)
             story.append(img_trend)
             story.append(Spacer(1, 10))
