@@ -77,7 +77,7 @@ function switchTab(tabId) {
     if (activeContent) activeContent.classList.add('active');
 
     // Highlight wizard step
-    const stepMap = { 'overview': 'step1', 'cleaning': 'step2', 'correlation': 'step3', 'survival': 'step4', 'explorer': 'step5' };
+    const stepMap = { 'overview': 'step1', 'survival': 'step2', 'explorer': 'step3' };
     if (stepMap[tabId]) {
         const stepEl = document.getElementById(stepMap[tabId]);
         if (stepEl) stepEl.classList.add('active');
@@ -86,10 +86,6 @@ function switchTab(tabId) {
     // Trigger tab-specific initialization
     if (tabId === 'overview') {
         loadOverview();
-    } else if (tabId === 'cleaning') {
-        loadCleaningTab();
-    } else if (tabId === 'correlation') {
-        loadCorrelationMatrix();
     } else if (tabId === 'survival') {
         loadDemographicsAndSurvival();
     } else if (tabId === 'explorer') {
@@ -874,6 +870,27 @@ function renderSelectedDemographics() {
             }
         }
     }, 50);
+}
+
+// ==========================================
+// Trends Tab Search Filter
+// ==========================================
+function filterTrendsSearch() {
+    const query = (document.getElementById('trendSearchInput').value || '').trim().toLowerCase();
+
+    // Filter demographic chart boxes
+    const chartBoxes = document.querySelectorAll('#demographicsChartsGrid .demo-chart-box');
+    chartBoxes.forEach(box => {
+        const title = (box.querySelector('h4') || {}).textContent || '';
+        box.style.display = title.toLowerCase().includes(query) || query === '' ? '' : 'none';
+    });
+
+    // Filter numeric summary table rows
+    const rows = document.querySelectorAll('#numericSummaryTableBody tr');
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(query) || query === '' ? '' : 'none';
+    });
 }
 
 // ==========================================

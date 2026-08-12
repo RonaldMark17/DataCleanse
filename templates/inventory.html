@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory — DataCleanse</title>
+    <meta name="description" content="Manage inventory items and quantities across multiple stores.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=12.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}?v=12.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}?v=2.0">
+    <style>
+    select.inv-form-control option,select.inv-store-select option{background:var(--bg-card);color:var(--text-primary)}
+    /* Store chips */
+    .inv-store-chip{display:inline-block;background:rgba(255,255,255,0.04);color:var(--text-primary);padding:6px 8px;border-radius:999px;font-size:0.78rem;margin-right:6px;margin-bottom:4px;border:1px solid rgba(255,255,255,0.04)}
+    .inv-store-chip strong{font-weight:600;margin-right:6px}
+    .inv-store-more{display:inline-block;cursor:pointer;color:var(--text-muted);font-size:0.78rem;margin-left:6px;border:none;background:transparent;padding:0}
+    .inv-store-more:focus{outline:2px solid rgba(255,255,255,0.06);border-radius:4px}
+    .inv-store-hidden{display:none}
+    .inv-store-row .inv-form-control.error{border-color:var(--danger);box-shadow:0 0 0 3px rgba(255,0,0,0.06)}
+    .inv-assign-summary{margin-top:8px;font-size:0.86rem;color:var(--text-muted);display:flex;gap:12px;align-items:center}
+    .inv-assign-summary .inv-remaining{font-weight:700}
+
+    /* Pagination styles - placed directly below table inside the card */
+    .inv-pagination-container{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;padding:12px 8px;border-top:1px solid rgba(255,255,255,0.03);margin-top:12px}
+    .inv-pg-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--text-primary);padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:600}
+    .inv-pg-btn:hover:not(:disabled){background:rgba(255,255,255,0.02)}
+    .inv-pg-btn:disabled{opacity:0.4;cursor:not-allowed}
+    .inv-pg-btn.active{background:linear-gradient(180deg,rgba(100,60,255,0.12),rgba(50,20,180,0.12));border-color:rgba(100,60,255,0.2)}
+    .inv-pg-prev,.inv-pg-next{font-size:1.1rem;padding:6px 12px}
+    .inv-pg-perpage{margin-left:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+    .inv-pg-perpage select{background:var(--bg-card);color:var(--text-primary);border:1px solid rgba(255,255,255,0.04);padding:6px;border-radius:6px}
+</style>
+</head>
+<body class="dark-theme">
+
+<!-- Header — matches main app -->
+<header class="app-header">
+    <div class="header-left">
+        <div class="brand-area">
+            <div class="logo-icon"><i class="fa-solid fa-chart-simple"></i></div>
+            <div class="brand-text">
+                <h1>DataCleanse</h1>
+                <p>Data Validation &bull; Correlation &bull; Trend Analytics</p>
+            </div>
+        </div>
+        <nav class="module-nav">
+            <a href="/" class="module-nav-item" id="navData">
+                <i class="fa-solid fa-chart-pie"></i> Data
+            </a>
+            <a href="/inventory" class="module-nav-item active" id="navInventory">
+                <i class="fa-solid fa-boxes-stacked"></i> Inventory
+            </a>
+        </nav>
+    </div>
+    <div class="header-right">
+        <button type="button" class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleInvTheme()" title="Switch to light mode">
+            <i class="fa-solid fa-moon" id="themeIcon"></i>
+        </button>
+        <button type="button" class="btn-logout" onclick="if(confirm('Are you sure you want to log out?'))window.location.href='/logout'" title="Sign out">
+            <i class="fa-solid fa-right-from-bracket"></i><span>Logout</span>
+        </button>
+    </div>
+</header>
+
+<main>
+<div class="inv-page">
+    <div class="inv-page-title">
+        <div class="title-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+        <div>
+            <h2>Inventory Management</h2>
+            <p>Track stock levels — add, update, and manage inventory items.</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="inv-stats-row">
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon inv-stat-icon-indigo"><i class="fa-solid fa-store"></i></div>
+            <div><div class="inv-stat-value" id="statTotalStores">0</div><div class="inv-stat-label">Active Stores</div></div>
+        </div>
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon inv-stat-icon-emerald"><i class="fa-solid fa-tag"></i></div>
+            <div><div class="inv-stat-value" id="statTotalItems">0</div><div class="inv-stat-label">Item Catalog</div></div>
+        </div>
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon inv-stat-icon-blue"><i class="fa-solid fa-cubes-stacked"></i></div>
+            <div><div class="inv-stat-value" id="statTotalRecords">0</div><div class="inv-stat-label">Store Records</div></div>
+        </div>
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon inv-stat-icon-amber"><i class="fa-solid fa-cubes"></i></div>
+            <div><div class="inv-stat-value" id="statTotalOnHand">0</div><div class="inv-stat-label">Total On Hand</div></div>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="inv-toolbar">
+        <div class="inv-toolbar-left">
+            <select id="invStoreSelect" class="inv-store-select" onchange="onStoreChange()" aria-label="Filter by store">
+                <option value="">— All Items —</option>
+            </select>
+            <button class="btn-inv-add btn-inv-manage-stores" onclick="openStoreManageModal()" id="btnManageStores">
+                <i class="fa-solid fa-gear"></i> Manage Stores
+            </button>
+        </div>
+        <div class="inv-toolbar-right">
+            <div class="inv-search-wrap">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="invSearchInput" class="inv-search-input" placeholder="Search items, category..." autocomplete="off">
+            </div>
+            <button class="btn-inv-add btn-inv-add-item" onclick="openAddItemModal()" id="btnAddItem">
+                <i class="fa-solid fa-plus"></i> Add Item
+            </button>
+        </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <div class="inv-table-card">
+        <div class="inv-table-header">
+            <h3><i class="fa-solid fa-table-list"></i> Inventory — <span id="invTableStoreLabel">All Items</span></h3>
+            <span class="inv-record-count" id="invRecordCount">0 items</span>
+        </div>
+        <div class="inv-table-wrap">
+            <table class="inv-table" id="invTable">
+                <thead>
+                    <tr>
+                        <th>Item Name</th><th>Unit</th>
+                        <th>On Hand</th><th>On Store</th><th>Total Pcs</th><th>Stock Alert</th><th>Last Updated</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="invTbody">
+                    <tr><td colspan="9"><div class="inv-empty-state">
+                        <div class="inv-empty-icon"><i class="fa-solid fa-box-open"></i></div>
+                        <h4>No Items Yet</h4>
+                        <p>Click <strong>+ Add Item</strong> to add your first inventory item.</p>
+                    </div></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Pagination placed directly below the inventory table, inside the same card/container -->
+        <div id="invPagination" class="inv-pagination-container" aria-label="Inventory pagination"></div>
+    </div>
+</div>
+</main>
+
+<!-- MODAL: Add/Edit Store -->
+<div class="inv-modal-overlay" id="storeModal" role="dialog" aria-modal="true">
+    <div class="inv-modal">
+        <div class="inv-modal-header">
+            <h3><i class="fa-solid fa-store"></i> <span id="storeModalTitle">Add New Store</span></h3>
+            <button class="inv-modal-close" onclick="closeModal('storeModal')">&times;</button>
+        </div>
+        <form id="storeForm" onsubmit="event.preventDefault();saveStore();">
+            <div class="inv-modal-body">
+                <div class="inv-form-group">
+                    <label for="storeNameInput">Store Name <span class="req">*</span></label>
+                    <input type="text" id="storeNameInput" class="inv-form-control" placeholder="e.g. Main Warehouse" maxlength="100" autocomplete="off">
+                    <span class="inv-field-error" id="storeNameErr"><i class="fa-solid fa-circle-exclamation"></i></span>
+                </div>
+            </div>
+            <div class="inv-modal-footer">
+                <button type="button" class="btn-inv-cancel" onclick="closeModal('storeModal')"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                <button type="submit" class="btn-inv-save" id="btnSaveStore"><i class="fa-solid fa-floppy-disk"></i> Save Store</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: Manage Stores -->
+<div class="inv-modal-overlay" id="storeManageModal" role="dialog" aria-modal="true">
+    <div class="inv-modal inv-modal-lg">
+        <div class="inv-modal-header">
+            <h3><i class="fa-solid fa-gear"></i> Manage Stores</h3>
+            <button class="inv-modal-close" onclick="closeModal('storeManageModal')">&times;</button>
+        </div>
+        <div class="inv-modal-body">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <p style="font-size:0.85rem;color:var(--text-muted);margin:0;">Manage your store locations. Add, rename, or deactivate stores.</p>
+                <button class="btn-inv-add btn-inv-add-item" onclick="openAddStoreModal()"><i class="fa-solid fa-plus"></i> New Store</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="inv-stores-table">
+                    <thead><tr><th>Store Name</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="storesTbody"><tr><td colspan="4" style="padding:2rem;text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="inv-modal-footer">
+            <button type="button" class="btn-inv-cancel" onclick="closeModal('storeManageModal')"><i class="fa-solid fa-xmark"></i> Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Add / Edit Item -->
+<div class="inv-modal-overlay" id="itemModal" role="dialog" aria-modal="true">
+    <div class="inv-modal">
+        <div class="inv-modal-header">
+            <h3><i class="fa-solid fa-plus" id="itemModalIcon"></i> <span id="itemModalTitle">Add Item</span></h3>
+            <button class="inv-modal-close" onclick="closeModal('itemModal')">&times;</button>
+        </div>
+        <form id="itemForm" onsubmit="event.preventDefault();saveNewItem();">
+            <div class="inv-modal-body">
+                <!-- Item details (visible when adding new) -->
+                <div id="itemNameSection">
+                    <div class="inv-form-group">
+                        <label for="invItemName">Item Name <span class="req">*</span></label>
+                        <input type="text" id="invItemName" class="inv-form-control" placeholder="e.g. Ballpoint Pen" maxlength="120" autocomplete="off">
+                        <span class="inv-field-error" id="invItemNameErr"><i class="fa-solid fa-circle-exclamation"></i></span>
+                    </div>
+                    <div class="inv-form-row">
+                        <div class="inv-form-group">
+                            <label for="invItemUnit">Unit of Measure</label>
+                            <select id="invItemUnit" class="inv-form-control">
+                                <option value="pcs">pcs (pieces)</option>
+                                <option value="box">box</option>
+                                <option value="pack">pack</option>
+                                <option value="kg">kg</option>
+                                <option value="g">g</option>
+                                <option value="L">L (liter)</option>
+                                <option value="mL">mL</option>
+                                <option value="m">m (meter)</option>
+                                <option value="ft">ft (feet)</option>
+                                <option value="set">set</option>
+                                <option value="pair">pair</option>
+                                <option value="roll">roll</option>
+                                <option value="ream">ream</option>
+                                <option value="bottle">bottle</option>
+                                <option value="can">can</option>
+                                <option value="bag">bag</option>
+                                <option value="unit">unit</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="inv-form-group">
+                        <label for="invItemDesc">Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <textarea id="invItemDesc" class="inv-form-control" rows="2" placeholder="Short item description..." maxlength="300"></textarea>
+                    </div>
+                </div>
+                <!-- Item name display (visible when editing) -->
+                <div id="itemEditNameDisplay" style="display:none;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:1.1rem;display:flex;align-items:center;gap:14px;">
+                        <i class="fa-solid fa-box" style="color:var(--accent-emerald);font-size:1.2rem;"></i>
+                        <div>
+                            <div style="font-weight:700;" id="invItemDisplayName">&mdash;</div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="inv-section-sep">
+                <div class="inv-section-label">Designate Store <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(optional)</span></div>
+                <div class="inv-form-group" style="margin-bottom:1rem;">
+                    <label for="invStoreAssign">Assign to Store</label>
+                    <select id="invStoreAssign" class="inv-form-control" style="display:none;">
+                        <option value="">— No Store / Keep as catalog item —</option>
+                    </select>
+                    <div id="invStoreAssignList" style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">
+                        <!-- Dynamic per-store rows inserted here by JS -->
+                    </div>
+                    <div class="inv-assign-summary" id="invAssignSummary" style="display:block;">
+                        <div>Total Assigned: <span id="invTotalAssigned">0</span></div>
+                        <div>Remaining: <span id="invRemaining" class="inv-remaining">0</span></div>
+                    </div>
+                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+                        <button type="button" class="btn-inv-add" onclick="addStoreAssignRow()"><i class="fa-solid fa-plus"></i> Add Store</button>
+                        <small style="color:var(--text-muted);font-size:0.74rem;margin-left:6px;">Add one or more store assignments for this item.</small>
+                    </div>
+                    <small style="color:var(--text-muted);font-size:0.74rem;margin-top:4px;display:block;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Leave blank to add to the item catalog only. Add store rows to assign quantities to specific stores.
+                    </small>
+                </div>
+                <hr class="inv-section-sep">
+            </div>
+            <div class="inv-modal-footer">
+                <button type="button" class="btn-inv-cancel" onclick="closeModal('itemModal')"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                <button type="submit" class="btn-inv-save" id="btnSaveItem"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: Confirm Delete -->
+<div class="inv-modal-overlay" id="confirmModal" role="dialog" aria-modal="true">
+    <div class="inv-modal" style="max-width:420px;">
+        <div class="inv-modal-header">
+            <h3><i class="fa-solid fa-shield-halved"></i> <span id="confirmTitle">Confirm</span></h3>
+            <button class="inv-modal-close" onclick="closeModal('confirmModal')">&times;</button>
+        </div>
+        <div class="inv-modal-body">
+            <div class="inv-confirm-icon danger" id="confirmIcon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="inv-confirm-text"><p id="confirmBody">Are you sure?</p></div>
+        </div>
+        <div class="inv-modal-footer">
+            <button type="button" class="btn-inv-cancel" onclick="closeModal('confirmModal')"><i class="fa-solid fa-xmark"></i> Cancel</button>
+            <button type="button" class="btn-inv-danger" onclick="doConfirm()"><i class="fa-solid fa-trash"></i> Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="inv-toast-container" id="invToastContainer" aria-live="polite"></div>
+
+<script>
+(function(){
+    const saved = localStorage.getItem('theme')||'dark';
+    document.body.className=saved+'-theme';
+    const icon=document.getElementById('themeIcon');
+    const btn=document.getElementById('themeToggleBtn');
+    if(icon) icon.className=saved==='dark'?'fa-solid fa-moon':'fa-solid fa-sun';
+    if(btn) btn.title=saved==='dark'?'Switch to light mode':'Switch to dark mode';
+})();
+function toggleInvTheme(){
+    const isDark=document.body.classList.contains('dark-theme');
+    const next=isDark?'light':'dark';
+    document.body.className=next+'-theme';
+    localStorage.setItem('theme',next);
+    const icon=document.getElementById('themeIcon');
+    const btn=document.getElementById('themeToggleBtn');
+    if(icon) icon.className=next==='dark'?'fa-solid fa-moon':'fa-solid fa-sun';
+    if(btn) btn.title=next==='dark'?'Switch to light mode':'Switch to dark mode';
+}
+</script>
+<script src="{{ url_for('static', filename='js/inventory.js') }}?v=2.0"></script>
+</body>
+</html>

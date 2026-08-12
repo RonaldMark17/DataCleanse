@@ -1,8 +1,9 @@
+import uuid
 import os
 import io
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, Response, session, redirect, url_for
 from analytics_engine import AnalyticsEngine
 
 import json
@@ -61,6 +62,73 @@ def get_active_df():
     if DATASTORE.get("df") is None:
         load_session_from_disk()
     return DATASTORE.get("df")
+
+# =============================================================================
+# AUTHENTICATION SYSTEM
+# =============================================================================
+from functools import wraps
+
+VALID_CREDENTIALS = {
+    "username": "admin",
+    "password": "admin123"
+}
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            # For API routes, return 401 JSON
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Authentication required."}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if session.get('logged_in'):
+        return redirect(url_for('index'))
+
+    if request.method == 'GET':
+        return render_template('login.html', error=None)
+
+    # Handle POST (JSON from AJAX)
+    if request.is_json:
+        data = request.get_json()
+        username = (data.get('username') or '').strip()
+        password = data.get('password') or ''
+    else:
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+
+    if username == VALID_CREDENTIALS['username'] and password == VALID_CREDENTIALS['password']:
+        session['logged_in'] = True
+        session['user'] = username
+        if request.is_json:
+            return jsonify({"success": True, "redirect": "/"})
+        return redirect(url_for('index'))
+    else:
+        if request.is_json:
+            return jsonify({"success": False, "error": "Invalid username or password."}), 401
+        return render_template('login.html', error="Invalid username or password.")
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.before_request
+def require_login():
+    """Protect all routes except /login, /logout, and static files."""
+    allowed_paths = ['/login', '/logout']
+    if request.path.startswith('/static/'):
+        return  # Allow static files
+    if request.path in allowed_paths:
+        return  # Allow login/logout
+    if not session.get('logged_in'):
+        if request.path.startswith('/api/'):
+            return jsonify({"error": "Authentication required."}), 401
+        return redirect(url_for('login'))
 
 @app.route('/')
 def index():
@@ -310,6 +378,366 @@ def export_dataset(fmt):
         records = json.loads(df.to_json(orient='records'))
         return jsonify(records)
     return jsonify({"error": "Invalid export format"}), 400
+
+# =============================================================================
+# INVENTORY MANAGEMENT SYSTEM — SQLite Database & API Routes
+# =============================================================================
+import sqlite3
+
+INVENTORY_DB = os.path.join(os.path.dirname(__file__), 'session_data', 'inventory.db')
+
+def get_inv_db():
+    """Get a connection to the inventory SQLite database."""
+    conn = sqlite3.connect(INVENTORY_DB)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+def init_inventory_db():
+    """Create inventory tables if they don't exist."""
+    conn = get_inv_db()
+    c = conn.cursor()
+    c.executescript("""
+        CREATE TABLE IF NOT EXISTS stores (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL UNIQUE,
+            description TEXT    DEFAULT '',
+            status      TEXT    NOT NULL DEFAULT 'active',
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE TABLE IF NOT EXISTS items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            sku         TEXT    NOT NULL UNIQUE,
+            category    TEXT    DEFAULT '',
+            unit        TEXT    DEFAULT 'pcs',
+            description TEXT    DEFAULT '',
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE TABLE IF NOT EXISTS store_inventory (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            store_id     INTEGER NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
+            item_id      INTEGER NOT NULL REFERENCES items(id)  ON DELETE CASCADE,
+            qty_on_hand  INTEGER NOT NULL DEFAULT 0 CHECK(qty_on_hand  >= 0),
+            qty_on_store INTEGER NOT NULL DEFAULT 0 CHECK(qty_on_store >= 0),
+            last_updated TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(store_id, item_id)
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+# Initialize on module load
+init_inventory_db()
+
+# ── Inventory Page Route ──────────────────────────────────────────────────────
+@app.route('/inventory')
+def inventory_page():
+    return render_template('inventory.html')
+
+# ── Store CRUD ────────────────────────────────────────────────────────────────
+@app.route('/api/inventory/stores', methods=['GET'])
+def inv_get_stores():
+    conn = get_inv_db()
+    rows = conn.execute("SELECT * FROM stores ORDER BY name ASC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/inventory/stores', methods=['POST'])
+def inv_create_store():
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    description = (data.get('description') or '').strip()
+    if not name:
+        return jsonify({"error": "Store name is required."}), 400
+    conn = get_inv_db()
+    try:
+        c = conn.execute(
+            "INSERT INTO stores (name, description) VALUES (?, ?)",
+            (name, description)
+        )
+        store_id = c.lastrowid
+        conn.commit()
+        store = dict(conn.execute("SELECT * FROM stores WHERE id=?", (store_id,)).fetchone())
+        conn.close()
+        return jsonify(store), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": f"A store named '{name}' already exists."}), 409
+
+@app.route('/api/inventory/stores/<int:store_id>', methods=['PUT'])
+def inv_update_store(store_id):
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    description = (data.get('description') or '').strip()
+    status = data.get('status', 'active')
+    if not name:
+        return jsonify({"error": "Store name is required."}), 400
+    if status not in ('active', 'inactive'):
+        return jsonify({"error": "Invalid status value."}), 400
+    conn = get_inv_db()
+    existing = conn.execute("SELECT id FROM stores WHERE id=?", (store_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Store not found."}), 404
+    try:
+        conn.execute(
+            "UPDATE stores SET name=?, description=?, status=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, description, status, store_id)
+        )
+        conn.commit()
+        store = dict(conn.execute("SELECT * FROM stores WHERE id=?", (store_id,)).fetchone())
+        conn.close()
+        return jsonify(store)
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": f"A store named '{name}' already exists."}), 409
+
+@app.route('/api/inventory/stores/<int:store_id>', methods=['DELETE'])
+def inv_delete_store(store_id):
+    conn = get_inv_db()
+    existing = conn.execute("SELECT * FROM stores WHERE id=?", (store_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Store not found."}), 404
+    inv_count = conn.execute(
+        "SELECT COUNT(*) as cnt FROM store_inventory WHERE store_id=?", (store_id,)
+    ).fetchone()['cnt']
+    if inv_count > 0:
+        # Deactivate instead of hard-delete to preserve inventory data
+        conn.execute(
+            "UPDATE stores SET status='inactive', updated_at=datetime('now','localtime') WHERE id=?",
+            (store_id,)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "deactivated": True,
+                        "message": f"Store deactivated (has {inv_count} inventory record(s)). Inventory data preserved."})
+    conn.execute("DELETE FROM stores WHERE id=?", (store_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "deactivated": False, "message": "Store permanently deleted."})
+
+# ── Item CRUD ─────────────────────────────────────────────────────────────────
+@app.route('/api/inventory/items', methods=['GET'])
+def inv_get_items():
+    conn = get_inv_db()
+    rows = conn.execute("SELECT * FROM items ORDER BY name ASC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/inventory/all-items', methods=['GET'])
+def inv_get_all_items_with_qty():
+    """Return all items with aggregated quantities across all stores."""
+    conn = get_inv_db()
+    rows = conn.execute("""
+        SELECT i.id, i.name, i.sku, i.category, i.unit, i.description,
+               COALESCE(SUM(si.qty_on_hand), 0) as qty_on_hand,
+               COALESCE(SUM(si.qty_on_store), 0) as qty_on_store,
+               MAX(si.last_updated) as last_updated,
+               MAX(si.id) as inv_id,
+               MAX(si.store_id) as store_id
+        FROM items i
+        LEFT JOIN store_inventory si ON si.item_id = i.id
+        GROUP BY i.id
+        ORDER BY i.name ASC
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/inventory/items', methods=['POST'])
+def inv_create_item():
+    data = request.get_json() or {}
+    name        = (data.get('name') or '').strip()
+    sku         = (data.get('sku') or '').strip()
+    category    = (data.get('category') or '').strip()
+    unit        = (data.get('unit') or 'pcs').strip()
+    description = (data.get('description') or '').strip()
+    if not name:
+        return jsonify({"error": "Item name is required."}), 400
+    if not sku:
+        sku = f"AUTO-{uuid.uuid4().hex[:10].upper()}"
+    conn = get_inv_db()
+    try:
+        c = conn.execute(
+            "INSERT INTO items (name, sku, category, unit, description) VALUES (?,?,?,?,?)",
+            (name, sku, category, unit, description)
+        )
+        item_id = c.lastrowid
+        conn.commit()
+        item = dict(conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone())
+        conn.close()
+        return jsonify(item), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": f"An item with SKU '{sku}' already exists."}), 409
+
+@app.route('/api/inventory/items/<int:item_id>', methods=['PUT'])
+def inv_update_item(item_id):
+    data = request.get_json() or {}
+    name        = (data.get('name') or '').strip()
+    sku         = (data.get('sku') or '').strip()
+    category    = (data.get('category') or '').strip()
+    unit        = (data.get('unit') or 'pcs').strip()
+    description = (data.get('description') or '').strip()
+    if not name:
+        return jsonify({"error": "Item name is required."}), 400
+    if not sku:
+        sku = f"AUTO-{uuid.uuid4().hex[:10].upper()}"
+    conn = get_inv_db()
+    existing = conn.execute("SELECT id FROM items WHERE id=?", (item_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Item not found."}), 404
+    try:
+        conn.execute(
+            "UPDATE items SET name=?, sku=?, category=?, unit=?, description=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, sku, category, unit, description, item_id)
+        )
+        conn.commit()
+        item = dict(conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone())
+        conn.close()
+        return jsonify(item)
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": f"An item with SKU '{sku}' already exists."}), 409
+
+@app.route('/api/inventory/items/<int:item_id>', methods=['DELETE'])
+def inv_delete_item(item_id):
+    conn = get_inv_db()
+    existing = conn.execute("SELECT id FROM items WHERE id=?", (item_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Item not found."}), 404
+    # Cascade: store_inventory records removed by FK ON DELETE CASCADE
+    conn.execute("DELETE FROM items WHERE id=?", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": "Item and all associated inventory records deleted."})
+
+# ── Store-Inventory CRUD ──────────────────────────────────────────────────────
+@app.route('/api/inventory/store-inventory', methods=['GET'])
+def inv_get_store_inventory():
+    store_id = request.args.get('store_id', type=int)
+    conn = get_inv_db()
+    if store_id:
+        rows = conn.execute("""
+            SELECT si.id, si.store_id, si.item_id, si.qty_on_hand, si.qty_on_store,
+                   si.last_updated, i.name, i.sku, i.category, i.unit, i.description,
+                   s.name as store_name
+            FROM store_inventory si
+            JOIN items i ON i.id = si.item_id
+            JOIN stores s ON s.id = si.store_id
+            WHERE si.store_id = ?
+            ORDER BY i.name ASC
+        """, (store_id,)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT si.id, si.store_id, si.item_id, si.qty_on_hand, si.qty_on_store,
+                   si.last_updated, i.name, i.sku, i.category, i.unit, i.description,
+                   s.name as store_name
+            FROM store_inventory si
+            JOIN items i ON i.id = si.item_id
+            JOIN stores s ON s.id = si.store_id
+            ORDER BY s.name, i.name ASC
+        """).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/inventory/store-inventory', methods=['POST'])
+def inv_create_store_inventory():
+    data = request.get_json() or {}
+    store_id     = data.get('store_id')
+    item_id      = data.get('item_id')
+    qty_on_hand  = data.get('qty_on_hand', 0)
+    qty_on_store = data.get('qty_on_store', 0)
+    if not store_id:
+        return jsonify({"error": "Store is required."}), 400
+    if not item_id:
+        return jsonify({"error": "Item is required."}), 400
+    try:
+        qty_on_hand  = int(qty_on_hand)
+        qty_on_store = int(qty_on_store)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Quantities must be valid integers."}), 400
+    if qty_on_hand < 0 or qty_on_store < 0:
+        return jsonify({"error": "Quantities cannot be negative."}), 400
+    conn = get_inv_db()
+    store = conn.execute("SELECT id FROM stores WHERE id=?", (store_id,)).fetchone()
+    if not store:
+        conn.close()
+        return jsonify({"error": "Selected store does not exist."}), 400
+    item = conn.execute("SELECT id FROM items WHERE id=?", (item_id,)).fetchone()
+    if not item:
+        conn.close()
+        return jsonify({"error": "Selected item does not exist."}), 400
+    try:
+        c = conn.execute(
+            "INSERT INTO store_inventory (store_id, item_id, qty_on_hand, qty_on_store) VALUES (?,?,?,?)",
+            (store_id, item_id, qty_on_hand, qty_on_store)
+        )
+        inv_id = c.lastrowid
+        conn.commit()
+        row = conn.execute("""
+            SELECT si.*, i.name, i.sku, i.category, i.unit, i.description, s.name as store_name
+            FROM store_inventory si JOIN items i ON i.id=si.item_id JOIN stores s ON s.id=si.store_id
+            WHERE si.id=?
+        """, (inv_id,)).fetchone()
+        conn.close()
+        return jsonify(dict(row)), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "This item already exists in the selected store. Use Edit to update quantities."}), 409
+
+@app.route('/api/inventory/store-inventory/<int:inv_id>', methods=['PUT'])
+def inv_update_store_inventory(inv_id):
+    data = request.get_json() or {}
+    qty_on_hand  = data.get('qty_on_hand')
+    qty_on_store = data.get('qty_on_store')
+    if qty_on_hand is None or qty_on_store is None:
+        return jsonify({"error": "Both qty_on_hand and qty_on_store are required."}), 400
+    try:
+        qty_on_hand  = int(qty_on_hand)
+        qty_on_store = int(qty_on_store)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Quantities must be valid integers."}), 400
+    if qty_on_hand < 0 or qty_on_store < 0:
+        return jsonify({"error": "Quantities cannot be negative."}), 400
+    conn = get_inv_db()
+    existing = conn.execute("SELECT id FROM store_inventory WHERE id=?", (inv_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Inventory record not found."}), 404
+    conn.execute(
+        "UPDATE store_inventory SET qty_on_hand=?, qty_on_store=?, last_updated=datetime('now','localtime') WHERE id=?",
+        (qty_on_hand, qty_on_store, inv_id)
+    )
+    conn.commit()
+    row = conn.execute("""
+        SELECT si.*, i.name, i.sku, i.category, i.unit, i.description, s.name as store_name
+        FROM store_inventory si JOIN items i ON i.id=si.item_id JOIN stores s ON s.id=si.store_id
+        WHERE si.id=?
+    """, (inv_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+@app.route('/api/inventory/store-inventory/<int:inv_id>', methods=['DELETE'])
+def inv_delete_store_inventory(inv_id):
+    conn = get_inv_db()
+    existing = conn.execute("SELECT id FROM store_inventory WHERE id=?", (inv_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Inventory record not found."}), 404
+    conn.execute("DELETE FROM store_inventory WHERE id=?", (inv_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": "Inventory record removed."})
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     print("Starting Flask Data Analytics & Cleaning Web System on http://127.0.0.1:5050")

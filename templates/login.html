@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — DataCleanse Studio</title>
+    <meta name="description" content="Login to DataCleanse Studio — Data Validation, Correlation Matrix & Trend Analytics">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=11.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}?v=1.0">
+</head>
+<body class="dark-theme login-body">
+    <!-- Animated background particles -->
+    <div class="login-bg-particles">
+        <div class="particle p1"></div>
+        <div class="particle p2"></div>
+        <div class="particle p3"></div>
+        <div class="particle p4"></div>
+        <div class="particle p5"></div>
+        <div class="particle p6"></div>
+    </div>
+
+    <div class="login-container">
+        <!-- Brand header -->
+        <div class="login-brand">
+            <div class="login-logo-icon">
+                <i class="fa-solid fa-chart-simple"></i>
+            </div>
+            <h1>DataCleanse <span class="login-badge-pro">Studio</span></h1>
+            <p class="login-subtitle">Data Validation, Correlation Matrix & Trend Analytics</p>
+        </div>
+
+        <!-- Login card -->
+        <div class="login-card">
+            <div class="login-card-header">
+                <h2><i class="fa-solid fa-right-to-bracket"></i> Sign In</h2>
+                <p>Enter your credentials to continue</p>
+            </div>
+
+            <form id="loginForm" method="POST" action="/login" onsubmit="return handleLogin(event)">
+                <!-- Error message -->
+                <div class="login-error" id="loginError" style="display:none;">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="loginErrorText">Invalid credentials</span>
+                </div>
+
+                {% if error %}
+                <div class="login-error" style="display:flex;">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
+
+                <div class="login-form-group">
+                    <label for="loginUsername">
+                        <i class="fa-solid fa-user"></i> Username
+                    </label>
+                    <div class="login-input-wrap">
+                        <input type="text" id="loginUsername" name="username" placeholder="Enter username" 
+                               autocomplete="username" required autofocus>
+                    </div>
+                </div>
+
+                <div class="login-form-group">
+                    <label for="loginPassword">
+                        <i class="fa-solid fa-lock"></i> Password
+                    </label>
+                    <div class="login-input-wrap">
+                        <input type="password" id="loginPassword" name="password" placeholder="Enter password" 
+                               autocomplete="current-password" required>
+                        <button type="button" class="login-toggle-pw" onclick="togglePasswordVisibility()" title="Toggle password visibility">
+                            <i class="fa-solid fa-eye" id="pwToggleIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    <span id="loginBtnText">Sign In</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            <p>&copy; 2026 DataCleanse Studio. All rights reserved.</p>
+        </div>
+    </div>
+
+    <script>
+        // Apply saved theme
+        (function() {
+            const saved = localStorage.getItem('appTheme') || localStorage.getItem('theme') || 'dark';
+            document.body.className = saved + '-theme login-body';
+        })();
+
+        function togglePasswordVisibility() {
+            const pwInput = document.getElementById('loginPassword');
+            const icon = document.getElementById('pwToggleIcon');
+            if (pwInput.type === 'password') {
+                pwInput.type = 'text';
+                icon.className = 'fa-solid fa-eye-slash';
+            } else {
+                pwInput.type = 'password';
+                icon.className = 'fa-solid fa-eye';
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            const errorText = document.getElementById('loginErrorText');
+            const btn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('loginBtnText');
+
+            // Validate
+            if (!username || !password) {
+                errorDiv.style.display = 'flex';
+                errorText.textContent = 'Please enter both username and password.';
+                return false;
+            }
+
+            // Show loading
+            btn.disabled = true;
+            btnText.textContent = 'Signing in...';
+            btn.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
+
+            // Submit via fetch
+            fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Redirect with a small delay for feel
+                    btnText.textContent = 'Welcome!';
+                    btn.querySelector('i').className = 'fa-solid fa-check';
+                    btn.classList.add('login-btn-success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/';
+                    }, 400);
+                } else {
+                    errorDiv.style.display = 'flex';
+                    errorText.textContent = data.error || 'Invalid credentials.';
+                    btn.disabled = false;
+                    btnText.textContent = 'Sign In';
+                    btn.querySelector('i').className = 'fa-solid fa-arrow-right-to-bracket';
+                    // Shake animation
+                    const card = document.querySelector('.login-card');
+                    card.classList.add('shake');
+                    setTimeout(() => card.classList.remove('shake'), 500);
+                }
+            })
+            .catch(() => {
+                errorDiv.style.display = 'flex';
+                errorText.textContent = 'Network error. Please try again.';
+                btn.disabled = false;
+                btnText.textContent = 'Sign In';
+                btn.querySelector('i').className = 'fa-solid fa-arrow-right-to-bracket';
+            });
+
+            return false;
+        }
+    </script>
+</body>
+</html>

@@ -26,23 +26,15 @@
             <button class="tab-btn active" onclick="switchTab('overview')">
                 <i class="fa-solid fa-chart-pie"></i> 1. Health & Overview
             </button>
-            <button class="tab-btn" onclick="switchTab('cleaning')">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> 2. Clean & Fix Data
-            </button>
-            <button class="tab-btn" onclick="switchTab('correlation')">
-                <i class="fa-solid fa-diagram-project"></i> 3. Find Connections
-            </button>
             <button class="tab-btn" onclick="switchTab('survival')">
-                <i class="fa-solid fa-chart-line"></i> 4. Demographics & Trends
+                <i class="fa-solid fa-chart-line"></i> 2. Demographics & Trends
             </button>
             <button class="tab-btn" onclick="switchTab('explorer')">
-                <i class="fa-solid fa-table"></i> 5. Search & Export
+                <i class="fa-solid fa-table"></i> 3. Search & Export
             </button>
         </nav>
 
         {% include 'tabs/tab1_overview.html' %}
-        {% include 'tabs/tab2_cleaning.html' %}
-        {% include 'tabs/tab3_correlation.html' %}
         {% include 'tabs/tab4_trends.html' %}
         {% include 'tabs/tab5_records.html' %}
     </main>

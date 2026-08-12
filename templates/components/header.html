@@ -1,35 +1,61 @@
-<!-- Top Navigation Header -->
+<!-- Top Navigation Header — Redesigned -->
 <header class="app-header">
-    <div class="brand-area">
-        <div class="logo-icon">
-            <i class="fa-solid fa-chart-simple"></i>
+    <div class="header-left">
+        <div class="brand-area">
+            <div class="logo-icon">
+                <i class="fa-solid fa-chart-simple"></i>
+            </div>
+            <div class="brand-text">
+                <h1>DataCleanse</h1>
+                <p>Data Validation &bull; Correlation &bull; Trend Analytics</p>
+            </div>
         </div>
-        <div class="brand-text">
-            <h1>DataCleanse <span class="badge-pro">Studio</span></h1>
-            <p>Data Validation, Correlation Matrix & Trend Analytics</p>
-        </div>
+
+        <!-- Primary Module Navigation -->
+        <nav class="module-nav">
+            <a href="/" class="module-nav-item active" id="navData">
+                <i class="fa-solid fa-chart-pie"></i> Data
+            </a>
+            <a href="/inventory" class="module-nav-item" id="navInventory">
+                <i class="fa-solid fa-boxes-stacked"></i> Inventory
+            </a>
+        </nav>
     </div>
 
-    <div class="header-controls">
-        <div class="dataset-pill" id="datasetPill">
-            <i class="fa-solid fa-database"></i>
-            <span id="activeDatasetName">No File Uploaded</span>
-            <span class="row-tag" id="activeDatasetRows">0 Rows</span>
-            <button type="button" class="btn-remove-pill" id="btnRemoveDataset" onclick="confirmClearDataset()" title="Remove Imported File" style="display: none;">
-                <i class="fa-solid fa-trash-can"></i> Remove
+    <div class="header-right">
+        <!-- File Info Pill -->
+        <div class="file-info-pill" id="datasetPill">
+            <i class="fa-regular fa-file-lines file-info-icon"></i>
+            <span class="file-info-name" id="activeDatasetName">No File Uploaded</span>
+            <span class="file-info-rows" id="activeDatasetRows">0 Rows</span>
+            <button type="button" class="file-info-remove" id="btnRemoveDataset" onclick="confirmClearDataset()" title="Remove imported file" style="display: none;">
+                <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
 
-        <button type="button" class="btn btn-outline" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light / Dark Mode">
+        <!-- Import Button -->
+        <label for="fileUploadInput" class="btn-import" title="Import Excel or CSV file">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Import
+        </label>
+        <input type="file" id="fileUploadInput" accept=".csv, .xlsx, .xls" style="display:none" onchange="handleFileUpload(event)">
+
+        <!-- Theme Toggle -->
+        <button type="button" class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" title="Switch to light mode">
             <i class="fa-solid fa-moon" id="themeIcon"></i>
-            <span id="themeText">Dark</span>
         </button>
 
-        <div class="sample-actions">
-            <label for="fileUploadInput" class="btn btn-primary btn-lg">
-                <i class="fa-solid fa-cloud-arrow-up"></i> Import Excel / CSV
-            </label>
-            <input type="file" id="fileUploadInput" accept=".csv, .xlsx, .xls" style="display:none" onchange="handleFileUpload(event)">
-        </div>
+        <!-- Logout -->
+        <button type="button" class="btn-logout" onclick="confirmLogout()" title="Sign out">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+        </button>
     </div>
 </header>
+
+<script>
+function confirmLogout() {
+    if (confirm('Are you sure you want to log out?')) {
+        window.location.href = '/logout';
+    }
+}
+</script>

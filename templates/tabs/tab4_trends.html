@@ -81,6 +81,13 @@
             <h3><i class="fa-solid fa-chart-pie"></i> Demographic Distributions & Statistics</h3>
             
             <div class="controls-group" style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+                <div class="form-group-inline" style="position:relative;">
+                    <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.8rem;pointer-events:none;"></i>
+                    <input type="text" id="trendSearchInput" placeholder="Search columns..." 
+                           style="padding:6px 10px 6px 30px;border-radius:var(--radius-sm);border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);font-size:0.84rem;width:180px;"
+                           oninput="filterTrendsSearch()" autocomplete="off">
+                </div>
+
                 <div class="form-group-inline">
                     <label style="font-size:0.85rem; color:var(--text-secondary); margin-right:6px;">Demographic Attribute:</label>
                     <select id="selDemographicCol" class="form-control-sm" onchange="renderSelectedDemographics()">
