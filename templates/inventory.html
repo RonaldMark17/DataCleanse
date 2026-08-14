@@ -8,15 +8,19 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/all.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=12.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}?v=12.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}?v=2.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css') }}?v=3.0">
     <style>
     select.inv-form-control option,select.inv-store-select option{background:var(--bg-card);color:var(--text-primary)}
     /* Store chips */
-    .inv-store-chip{display:inline-flex;align-items:center;background:rgba(99,102,241,0.08);color:var(--text-primary);padding:3px 9px;border-radius:12px;font-size:0.76rem;margin-right:4px;margin-bottom:2px;border:1px solid rgba(99,102,241,0.2)}
+    .inv-store-chips{display:flex;flex-wrap:wrap;gap:3px 4px;align-items:center}
+    .inv-store-chip{display:inline-flex;align-items:center;background:rgba(99,102,241,0.08);color:var(--text-primary);padding:3px 9px;border-radius:12px;font-size:0.76rem;border:1px solid rgba(99,102,241,0.2);flex-shrink:0}
     .inv-store-chip strong{font-weight:600;margin-right:4px;color:#a5b4fc}
-    .inv-store-more{display:inline-block;cursor:pointer;color:var(--text-muted);font-size:0.78rem;margin-left:6px;border:none;background:transparent;padding:0}
+    .inv-store-more{display:inline-flex;align-items:center;cursor:pointer;color:#818cf8;font-size:0.76rem;margin-top:1px;border:none;background:rgba(99,102,241,0.08);padding:3px 8px;border-radius:10px;border:1px solid rgba(99,102,241,0.15);transition:background 0.15s,color 0.15s,border-color 0.15s;font-weight:600;flex-shrink:0}
+    .inv-store-more:hover{background:rgba(99,102,241,0.18);color:#c4b5fd;border-color:rgba(99,102,241,0.35)}
     .inv-store-more:focus{outline:2px solid rgba(255,255,255,0.06);border-radius:4px}
+    .inv-store-more-open{background:rgba(16,185,129,0.1)!important;color:#34d399!important;border-color:rgba(16,185,129,0.3)!important}
     .inv-store-hidden{display:none}
+    .inv-store-hidden.inv-store-visible{display:contents}
     .inv-store-row .inv-form-control.error{border-color:var(--danger);box-shadow:0 0 0 3px rgba(255,0,0,0.06)}
     .inv-assign-summary{margin-top:8px;font-size:0.86rem;color:var(--text-muted);display:flex;gap:12px;align-items:center}
     .inv-assign-summary .inv-remaining{font-weight:700}
@@ -124,8 +128,26 @@
             <table class="inv-table" id="invTable">
                 <thead>
                     <tr>
-                        <th>Item Name</th><th>Unit</th>
-                        <th>On Hand</th><th>On Store</th><th>Total Pcs</th><th>Stock Alert</th><th>Last Updated</th><th>Actions</th>
+                        <th class="inv-th-sort" onclick="invSetSort('name')" id="th-name">
+                            Item Name <span class="inv-sort-icon" id="si-name"><i class="fa-solid fa-sort"></i></span>
+                        </th>
+                        <th>Unit</th>
+                        <th class="inv-th-sort" onclick="invSetSort('qty_on_hand')" id="th-qty_on_hand">
+                            On Hand <span class="inv-sort-icon" id="si-qty_on_hand"><i class="fa-solid fa-sort"></i></span>
+                        </th>
+                        <th class="inv-th-sort" onclick="invSetSort('qty_on_store')" id="th-qty_on_store">
+                            On Store <span class="inv-sort-icon" id="si-qty_on_store"><i class="fa-solid fa-sort"></i></span>
+                        </th>
+                        <th class="inv-th-sort" onclick="invSetSort('total_pcs')" id="th-total_pcs">
+                            Total Pcs <span class="inv-sort-icon" id="si-total_pcs"><i class="fa-solid fa-sort"></i></span>
+                        </th>
+                        <th class="inv-th-sort" onclick="invSetSort('stock_alert')" id="th-stock_alert">
+                            Stock Alert <span class="inv-sort-icon" id="si-stock_alert"><i class="fa-solid fa-sort-down"></i></span>
+                        </th>
+                        <th class="inv-th-sort" onclick="invSetSort('last_updated')" id="th-last_updated">
+                            Last Updated <span class="inv-sort-icon" id="si-last_updated"><i class="fa-solid fa-sort"></i></span>
+                        </th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="invTbody">
@@ -150,7 +172,7 @@
             <h3><i class="fa-solid fa-store"></i> <span id="storeModalTitle">Add New Store</span></h3>
             <button class="inv-modal-close" onclick="closeModal('storeModal')">&times;</button>
         </div>
-        <form id="storeForm" onsubmit="event.preventDefault();saveStore();">
+        <form id="storeForm">
             <div class="inv-modal-body">
                 <div class="inv-form-group">
                     <label for="storeNameInput">Store Name <span class="req">*</span></label>
@@ -324,6 +346,6 @@ function toggleInvTheme(){
     if(btn) btn.title=next==='dark'?'Switch to light mode':'Switch to dark mode';
 }
 </script>
-<script src="{{ url_for('static', filename='js/inventory.js') }}?v=2.2"></script>
+<script src="{{ url_for('static', filename='js/inventory.js') }}?v=2.4"></script>
 </body>
 </html>

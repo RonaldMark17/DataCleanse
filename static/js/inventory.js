@@ -17,6 +17,11 @@ let INV = {
     pagination: {
         page: 1,
         perPage: 10
+    },
+    // sort state: field + direction
+    sort: {
+        field: 'stock_alert',  // default: low stock first
+        dir: 'asc'             // asc = low stock / low qty first; desc = opposite
     }
 };
 
@@ -312,17 +317,33 @@ function renderStoreChips(storeArr, productKey) {
     if (hidden.length > 0) {
         html += `<span id="inv-sb-hidden-${safeKey}" class="inv-store-hidden">`;
         for (const s of hidden) html += `<span class="inv-store-chip"><strong>${escHtml(s.name)}</strong>: ${escHtml(String(s.qty))}</span>`;
-        html += `</span><button type="button" class="inv-store-more" onclick="toggleStoreHidden('${safeKey}')">+${hidden.length} more</button>`;
+        html += `</span><button type="button" class="inv-store-more" id="inv-sb-btn-${safeKey}" onclick="toggleStoreHidden('${safeKey}', this)">+${hidden.length} more</button>`;
     }
     html += '</div>';
     return html;
 }
 
-function toggleStoreHidden(safeKey) {
-    const el = document.getElementById('inv-sb-hidden-' + safeKey);
+function toggleStoreHidden(safeKey, btn) {
+    const el  = document.getElementById('inv-sb-hidden-' + safeKey);
+    const btn2 = btn || document.getElementById('inv-sb-btn-' + safeKey);
     if (!el) return;
-    if (el.classList.contains('inv-store-hidden')) el.classList.remove('inv-store-hidden');
-    else el.classList.add('inv-store-hidden');
+    const isHidden = el.classList.contains('inv-store-hidden');
+    if (isHidden) {
+        el.classList.remove('inv-store-hidden');
+        el.classList.add('inv-store-visible');
+        if (btn2) {
+            btn2.textContent = 'Show less \u2191';
+            btn2.classList.add('inv-store-more-open');
+        }
+    } else {
+        el.classList.remove('inv-store-visible');
+        el.classList.add('inv-store-hidden');
+        if (btn2) {
+            const count = el.querySelectorAll('.inv-store-chip').length;
+            btn2.textContent = '+' + count + ' more';
+            btn2.classList.remove('inv-store-more-open');
+        }
+    }
 }
 
 // Update total assigned and remaining shown in the item modal
@@ -582,8 +603,14 @@ async function loadInventory(storeId) {
         INV.inventory = data;
         applyFilter();
         updateStats();
+        // Restore header to the actual store name after loading completes
+        const store = INV.stores.find(s => s.id === storeId);
+        updateTableHeader(store ? store.name : 'Store');
     } catch (e) {
         invToast('Failed to load inventory.', 'error');
+        // Restore header on error too
+        const store = INV.stores.find(s => s.id === storeId);
+        updateTableHeader(store ? store.name : 'Store');
     }
 }
 
@@ -633,14 +660,44 @@ function renderInventoryTable() {
 
     const LOW_STOCK_THRESHOLD = 10;
 
-    // Sort low stock items first (work on a copy to avoid re-sorting original array repeatedly)
+    // Dynamic sort based on INV.sort state
+    const { field, dir } = INV.sort;
+    const mult = dir === 'asc' ? 1 : -1;
     const sorted = [...INV.filteredInventory].sort((a, b) => {
-        const totalA = (a.qty_on_hand || 0) + (a.qty_on_store || 0);
-        const totalB = (b.qty_on_hand || 0) + (b.qty_on_store || 0);
-        const aLow = totalA <= LOW_STOCK_THRESHOLD ? 0 : 1;
-        const bLow = totalB <= LOW_STOCK_THRESHOLD ? 0 : 1;
-        if (aLow !== bLow) return aLow - bLow;
-        return totalA - totalB;
+        let av, bv;
+        switch (field) {
+            case 'name':
+                av = (a.name || '').toLowerCase();
+                bv = (b.name || '').toLowerCase();
+                return mult * av.localeCompare(bv);
+            case 'qty_on_hand':
+                av = Number(a.qty_on_hand || 0);
+                bv = Number(b.qty_on_hand || 0);
+                return mult * (av - bv);
+            case 'qty_on_store':
+                av = Number(a.qty_on_store || 0);
+                bv = Number(b.qty_on_store || 0);
+                return mult * (av - bv);
+            case 'total_pcs':
+                av = (Number(a.qty_on_hand || 0) + Number(a.qty_on_store || 0));
+                bv = (Number(b.qty_on_hand || 0) + Number(b.qty_on_store || 0));
+                return mult * (av - bv);
+            case 'stock_alert': {
+                // asc = low stock rows first; desc = in-stock rows first
+                const totalA = (Number(a.qty_on_hand || 0) + Number(a.qty_on_store || 0));
+                const totalB = (Number(b.qty_on_hand || 0) + Number(b.qty_on_store || 0));
+                const aLow = totalA <= LOW_STOCK_THRESHOLD ? 0 : 1;
+                const bLow = totalB <= LOW_STOCK_THRESHOLD ? 0 : 1;
+                if (aLow !== bLow) return mult * (aLow - bLow);
+                return mult * (totalA - totalB);
+            }
+            case 'last_updated':
+                av = a.last_updated ? new Date(a.last_updated.replace(' ', 'T')).getTime() : 0;
+                bv = b.last_updated ? new Date(b.last_updated.replace(' ', 'T')).getTime() : 0;
+                return mult * (av - bv);
+            default:
+                return 0;
+        }
     });
 
     const start = (INV.pagination.page - 1) * perPage;
@@ -692,6 +749,39 @@ function renderInventoryTable() {
 
     // Render pagination controls if container exists
     renderPaginationControls(totalPages);
+    // Sync sort arrow icons after every render
+    invUpdateSortIcons();
+}
+
+// ── Sort helpers ────────────────────────────────────────────────────────────
+const INV_SORT_FIELDS = ['name', 'qty_on_hand', 'qty_on_store', 'total_pcs', 'stock_alert', 'last_updated'];
+
+function invSetSort(field) {
+    if (!INV_SORT_FIELDS.includes(field)) return;
+    if (INV.sort.field === field) {
+        // Same field → toggle direction
+        INV.sort.dir = INV.sort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        // New field → default direction
+        // Numeric/qty fields: desc first (highest first). Name / last_updated / stock: asc first.
+        INV.sort.field = field;
+        INV.sort.dir = (field === 'qty_on_hand' || field === 'qty_on_store' || field === 'total_pcs') ? 'desc' : 'asc';
+    }
+    // Reset to page 1 when sort changes
+    INV.pagination.page = 1;
+    renderInventoryTable();
+}
+
+function invUpdateSortIcons() {
+    const iconMap = { asc: 'fa-sort-up', desc: 'fa-sort-down', none: 'fa-sort' };
+    for (const f of INV_SORT_FIELDS) {
+        const th  = document.getElementById('th-' + f);
+        const si  = document.getElementById('si-' + f);
+        if (!th || !si) continue;
+        const isActive = INV.sort.field === f;
+        th.classList.toggle('inv-th-sort-active', isActive);
+        si.innerHTML = `<i class="fa-solid ${isActive ? iconMap[INV.sort.dir] : iconMap.none}"></i>`;
+    }
 }
 
 function renderPaginationControls(totalPages) {

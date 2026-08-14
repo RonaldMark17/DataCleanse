@@ -258,6 +258,37 @@
 .inv-table tbody tr:nth-child(even) td { background: rgba(125,125,125,0.025); }
 .inv-table tbody tr:hover td { background: rgba(16, 185, 129, 0.07) !important; }
 
+/* ── Sortable column headers ─────────────────────────────────────────────── */
+.inv-th-sort {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.18s, color 0.18s;
+    position: relative;
+}
+.inv-th-sort:hover {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #6ee7b7;
+}
+.inv-th-sort-active {
+    background: rgba(16, 185, 129, 0.10) !important;
+    color: #34d399 !important;
+    box-shadow: inset 0 -2px 0 0 #10b981;
+}
+.inv-sort-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 5px;
+    font-size: 0.78rem;
+    opacity: 0.45;
+    vertical-align: middle;
+    transition: opacity 0.18s, color 0.18s;
+}
+.inv-th-sort:hover .inv-sort-icon,
+.inv-th-sort-active .inv-sort-icon {
+    opacity: 1;
+    color: #34d399;
+}
+
 /* Cell styles */
 .inv-item-name { font-weight: 600; white-space: normal; line-height: 1.35; }
 .inv-item-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
