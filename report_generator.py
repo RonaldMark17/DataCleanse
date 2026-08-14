@@ -582,7 +582,7 @@ class InventoryReportGenerator:
         story = []
 
         # 1. Header Banner
-        story.append(Paragraph("DataCleanse &bull; Inventory Stock Report", title_style))
+        story.append(Paragraph("Inventory Stock Report", title_style))
         gen_time = datetime.datetime.now().strftime("%B %d, %Y at %I:%M %p")
         story.append(Paragraph(f"Scope: <b>{store_name}</b> &nbsp;|&nbsp; Generated on: {gen_time}", subtitle_style))
         story.append(HRFlowable(width="100%", thickness=1.5, color=ACCENT_TEAL, spaceBefore=2, spaceAfter=8))
@@ -743,7 +743,7 @@ class InventoryReportGenerator:
         # 1. Title Banner
         ws.merge_cells("A1:G1")
         c1 = ws["A1"]
-        c1.value = "  DataCleanse — Inventory Management & Stock Report"
+        c1.value = "  Inventory Stock Report"
         c1.font = font_title
         c1.fill = fill_banner
         c1.alignment = Alignment(horizontal="left", vertical="center")
