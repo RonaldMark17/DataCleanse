@@ -158,13 +158,16 @@
                         <th class="inv-th-sort" onclick="invSetSort('name')" id="th-name">
                             Item Name <span class="inv-sort-icon" id="si-name"><i class="fa-solid fa-sort"></i></span>
                         </th>
+                        <th class="inv-th-sort" onclick="invSetSort('original_total_pcs')" id="th-original_total_pcs" title="The initial starting quantity of the item.">
+                            Original Total PCS <span class="inv-sort-icon" id="si-original_total_pcs"><i class="fa-solid fa-sort"></i></span>
+                        </th>
                         <th class="inv-th-sort" onclick="invSetSort('qty_on_hand')" id="th-qty_on_hand" title="The quantity of items currently available in the main inventory.">
                             On Hand <span class="inv-sort-icon" id="si-qty_on_hand"><i class="fa-solid fa-sort"></i></span>
                         </th>
                         <th class="inv-th-sort" onclick="invSetSort('qty_on_store')" id="th-qty_on_store" title="The quantity of items allocated or distributed to each store.">
                             On Store <span class="inv-sort-icon" id="si-qty_on_store"><i class="fa-solid fa-sort"></i></span>
                         </th>
-                        <th class="inv-th-sort" onclick="invSetSort('total_pcs')" id="th-total_pcs" title="The fixed total quantity of the item, calculated as Item on Hand + Item on Store.">
+                        <th class="inv-th-sort" onclick="invSetSort('total_pcs')" id="th-total_pcs" title="The current remaining quantity of the item, calculated as On Hand + On Store.">
                             Total Pcs <span class="inv-sort-icon" id="si-total_pcs"><i class="fa-solid fa-sort"></i></span>
                         </th>
                         <th class="inv-th-sort" onclick="invSetSort('stock_alert')" id="th-stock_alert">
@@ -177,7 +180,7 @@
                     </tr>
                 </thead>
                 <tbody id="invTbody">
-                    <tr><td colspan="7"><div class="inv-empty-state">
+                    <tr><td colspan="8"><div class="inv-empty-state">
                         <div class="inv-empty-icon"><i class="fa-solid fa-box-open"></i></div>
                         <h4>No Items Yet</h4>
                         <p>Click <strong>+ Add Item</strong> to add your first inventory item.</p>
@@ -272,6 +275,14 @@
                 </div>
                 <hr class="inv-section-sep">
                 <div class="inv-form-group" style="margin-bottom:1.1rem;">
+                    <label for="invOriginalTotalPcs">Original Total PCS <span class="req">*</span></label>
+                    <input type="number" id="invOriginalTotalPcs" class="inv-form-control" min="0" step="1" value="0" required>
+                    <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">
+                        The item's starting quantity before store transfers or sales.
+                    </small>
+                    <span class="inv-field-error" id="invOriginalTotalPcsErr"><i class="fa-solid fa-circle-exclamation"></i></span>
+                </div>
+                <div class="inv-form-group" style="margin-bottom:1.1rem;">
                     <label for="invQtyOnHand">Quantity on Hand (Main Inventory) <span class="req">*</span></label>
                     <input type="number" id="invQtyOnHand" class="inv-form-control" min="0" step="1" value="0" required>
                     <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">
@@ -289,6 +300,7 @@
                         <!-- Dynamic per-store rows inserted here by JS -->
                     </div>
                     <div class="inv-assign-summary" id="invAssignSummary" style="display:block;">
+                        <div>Original Total: <span id="invSummaryOriginalTotal" style="font-weight:700;color:#38bdf8;">0</span></div>
                         <div>On Hand: <span id="invSummaryOnHand" style="font-weight:700;color:var(--accent-emerald);">0</span></div>
                         <div>On Store: <span id="invSummaryOnStore" style="font-weight:700;color:var(--accent-amber);">0</span></div>
                         <div>Total Pcs: <span id="invSummaryTotalPcs" class="inv-remaining" style="color:#a5b4fc;">0</span> <small style="color:var(--text-muted);font-weight:normal;">(On Hand + On Store)</small></div>

@@ -368,6 +368,7 @@ function aggregateInventory(list) {
                 name: r.name || r.item_name || r.title || '—',
                 description: r.description || r.desc || r.note || '',
                 qty_on_hand: typeof r.qty_on_hand !== 'undefined' ? Number(r.qty_on_hand) : 0,
+                original_total_pcs: typeof r.original_total_pcs !== 'undefined' ? Number(r.original_total_pcs) : 0,
                 qty_on_store: 0,
                 total_pcs: 0,
                 store_breakdown: [],
@@ -392,9 +393,12 @@ function aggregateInventory(list) {
             agg.qty_on_store += qty;
         }
 
-        // Keep product-level qty_on_hand
+        // Keep product-level qty_on_hand and original_total_pcs
         if (typeof r.qty_on_hand !== 'undefined') {
             agg.qty_on_hand = Number(r.qty_on_hand);
+        }
+        if (typeof r.original_total_pcs !== 'undefined') {
+            agg.original_total_pcs = Number(r.original_total_pcs);
         }
         // Track most recent update
         if (r.last_updated && (!agg.last_updated || new Date(r.last_updated) > new Date(agg.last_updated))) {
@@ -455,17 +459,21 @@ function toggleStoreHidden(safeKey, btn) {
 
 // Update total assigned and total pcs shown in the item modal
 function updateAssignTotals() {
+    const origEl = document.getElementById('invOriginalTotalPcs');
     const handEl = document.getElementById('invQtyOnHand');
     const assigns = collectStoreAssignRows();
     const totalAssigned = assigns.reduce((s, a) => s + (Number(a.qty) || 0), 0);
 
+    const orig = origEl ? Math.max(0, parseInt(origEl.value || '0', 10) || 0) : 0;
     const hand = handEl ? Math.max(0, parseInt(handEl.value || '0', 10) || 0) : 0;
     const totalPcs = hand + totalAssigned;
 
+    const origSpan = document.getElementById('invSummaryOriginalTotal');
     const handSpan = document.getElementById('invSummaryOnHand');
     const storeSpan = document.getElementById('invSummaryOnStore');
     const totalSpan = document.getElementById('invSummaryTotalPcs');
 
+    if (origSpan) origSpan.textContent = String(orig);
     if (handSpan) handSpan.textContent = String(hand);
     if (storeSpan) storeSpan.textContent = String(totalAssigned);
     if (totalSpan) totalSpan.textContent = String(totalPcs);
@@ -839,6 +847,10 @@ function renderInventoryTable() {
                 av = (a.name || '').toLowerCase();
                 bv = (b.name || '').toLowerCase();
                 return mult * av.localeCompare(bv);
+            case 'original_total_pcs':
+                av = Number(a.original_total_pcs || 0);
+                bv = Number(b.original_total_pcs || 0);
+                return mult * (av - bv);
             case 'qty_on_hand':
                 av = Number(a.qty_on_hand || 0);
                 bv = Number(b.qty_on_hand || 0);
@@ -897,6 +909,7 @@ function renderInventoryTable() {
                 <div class="inv-item-name">${escHtml(r.name)}</div>
                 ${r.description ? `<div class="inv-item-desc">${escHtml(r.description)}</div>` : ''}
             </td>
+            <td><span class="inv-qty inv-qty-original">${r.original_total_pcs !== undefined ? r.original_total_pcs : 0}</span></td>
             <td><span class="inv-qty inv-qty-hand">${r.qty_on_hand}</span></td>
             <td>${storeColContent}</td>
             <td><span class="inv-qty inv-qty-total">${totalPcs}</span></td>
@@ -922,7 +935,7 @@ function renderInventoryTable() {
 }
 
 // ── Sort helpers ────────────────────────────────────────────────────────────
-const INV_SORT_FIELDS = ['name', 'qty_on_hand', 'qty_on_store', 'total_pcs', 'stock_alert', 'last_updated'];
+const INV_SORT_FIELDS = ['name', 'original_total_pcs', 'qty_on_hand', 'qty_on_store', 'total_pcs', 'stock_alert', 'last_updated'];
 
 function invSetSort(field) {
     if (!INV_SORT_FIELDS.includes(field)) return;
@@ -933,7 +946,7 @@ function invSetSort(field) {
         // New field → default direction
         // Numeric/qty fields: desc first (highest first). Name / last_updated / stock: asc first.
         INV.sort.field = field;
-        INV.sort.dir = (field === 'qty_on_hand' || field === 'qty_on_store' || field === 'total_pcs') ? 'desc' : 'asc';
+        INV.sort.dir = (field === 'original_total_pcs' || field === 'qty_on_hand' || field === 'qty_on_store' || field === 'total_pcs') ? 'desc' : 'asc';
     }
     // Reset to page 1 when sort changes
     INV.pagination.page = 1;
@@ -1073,6 +1086,7 @@ function openAddItemModal() {
     // Reset form fields
     const elName = document.getElementById('invItemName'); if (elName) elName.value = '';
     const elDesc = document.getElementById('invItemDesc'); if (elDesc) elDesc.value = '';
+    const elOrig = document.getElementById('invOriginalTotalPcs'); if (elOrig) elOrig.value = '0';
     const elHand = document.getElementById('invQtyOnHand'); if (elHand) elHand.value = '0';
 
     // Pre-select current store filter if one is active
@@ -1092,6 +1106,7 @@ function openAddItemModal() {
     // Keep totals and option disabling in sync
     refreshStoreOptionsToPreventDuplicates();
     updateAssignTotals();
+    const origEl = document.getElementById('invOriginalTotalPcs'); if (origEl) origEl.addEventListener('input', updateAssignTotals);
     const handEl = document.getElementById('invQtyOnHand'); if (handEl) handEl.addEventListener('input', updateAssignTotals);
 
     invClearErrors('itemForm');
@@ -1124,6 +1139,7 @@ function openEditInvModal(invId) {
 
     const elName = document.getElementById('invItemName'); if (elName) elName.value = rec.name || '';
     const elDesc = document.getElementById('invItemDesc'); if (elDesc) elDesc.value = rec.description || '';
+    const elOrig = document.getElementById('invOriginalTotalPcs'); if (elOrig) elOrig.value = (rec.original_total_pcs !== undefined ? rec.original_total_pcs : (rec.qty_on_hand || 0));
     const elHand = document.getElementById('invQtyOnHand'); if (elHand) elHand.value = (rec.qty_on_hand || 0);
 
     // Render store assignment rows for editing
@@ -1147,6 +1163,7 @@ function openEditInvModal(invId) {
     // Sync options + totals
     refreshStoreOptionsToPreventDuplicates();
     updateAssignTotals();
+    const origEl2 = document.getElementById('invOriginalTotalPcs'); if (origEl2) origEl2.addEventListener('input', updateAssignTotals);
     const handEl2 = document.getElementById('invQtyOnHand'); if (handEl2) handEl2.addEventListener('input', updateAssignTotals);
 
     invClearErrors('itemForm');
@@ -1161,6 +1178,8 @@ async function saveNewItem() {
     const descEl = document.getElementById('invItemDesc');
     const desc = descEl ? (descEl.value || '').trim() : '';
 
+    const origEl       = document.getElementById('invOriginalTotalPcs');
+    const origVal      = origEl ? origEl.value : '0';
     const qtyOnHandEl  = document.getElementById('invQtyOnHand');
     const qtyOnHandVal = qtyOnHandEl ? qtyOnHandEl.value : '0';
 
@@ -1169,12 +1188,17 @@ async function saveNewItem() {
         invShowError('invItemName', 'invItemNameErr', 'Item name is required.');
         valid = false;
     }
+    if (origVal === '' || isNaN(Number(origVal)) || Number(origVal) < 0) {
+        invShowError('invOriginalTotalPcs', 'invOriginalTotalPcsErr', 'Must be a non-negative number.');
+        valid = false;
+    }
     if (qtyOnHandVal === '' || isNaN(Number(qtyOnHandVal)) || Number(qtyOnHandVal) < 0) {
         invShowError('invQtyOnHand', 'invQtyOnHandErr', 'Must be a non-negative number.');
         valid = false;
     }
     if (!valid) return;
 
+    const original_total_pcs = Math.max(0, parseInt(origVal, 10) || 0);
     const qtyOnHand = Math.max(0, parseInt(qtyOnHandVal, 10) || 0);
     const assignRows = collectStoreAssignRows();
 
@@ -1199,11 +1223,11 @@ async function saveNewItem() {
                 return;
             }
 
-            // Step 1: Update item catalog details (name, description, qty_on_hand)
+            // Step 1: Update item catalog details (name, description, qty_on_hand, original_total_pcs)
             const itemRes = await fetch(`/api/inventory/items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand })
+                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand, original_total_pcs: original_total_pcs })
             });
             if (!itemRes.ok) {
                 const itemData = await itemRes.json().catch(() => ({}));
@@ -1233,7 +1257,7 @@ async function saveNewItem() {
             const itemRes = await fetch('/api/inventory/items', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand })
+                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand, original_total_pcs: original_total_pcs })
             });
             const itemData = await itemRes.json();
             if (!itemRes.ok) {

@@ -408,12 +408,13 @@ def init_inventory_db():
         );
 
         CREATE TABLE IF NOT EXISTS items (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT    NOT NULL,
-            description TEXT    DEFAULT '',
-            qty_on_hand INTEGER NOT NULL DEFAULT 0 CHECK(qty_on_hand >= 0),
-            created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            name               TEXT    NOT NULL,
+            description        TEXT    DEFAULT '',
+            qty_on_hand        INTEGER NOT NULL DEFAULT 0 CHECK(qty_on_hand >= 0),
+            original_total_pcs INTEGER NOT NULL DEFAULT 0 CHECK(original_total_pcs >= 0),
+            created_at         TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at         TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
         );
 
         CREATE TABLE IF NOT EXISTS store_inventory (
@@ -430,6 +431,18 @@ def init_inventory_db():
     item_cols = [r[1] for r in c.execute("PRAGMA table_info(items)").fetchall()]
     if 'qty_on_hand' not in item_cols:
         c.execute("ALTER TABLE items ADD COLUMN qty_on_hand INTEGER NOT NULL DEFAULT 0")
+    if 'original_total_pcs' not in item_cols:
+        c.execute("ALTER TABLE items ADD COLUMN original_total_pcs INTEGER NOT NULL DEFAULT 0")
+        try:
+            c.execute("""
+                UPDATE items
+                SET original_total_pcs = qty_on_hand + COALESCE((
+                    SELECT SUM(qty_on_store) FROM store_inventory WHERE store_inventory.item_id = items.id
+                ), 0)
+                WHERE original_total_pcs = 0
+            """)
+        except Exception:
+            pass
 
     # If old columns exist (category, unit, sku), rebuild table cleanly
     if any(col in item_cols for col in ('category', 'unit', 'sku')):
@@ -437,17 +450,18 @@ def init_inventory_db():
             c.execute("PRAGMA foreign_keys = OFF")
             c.execute("""
                 CREATE TABLE IF NOT EXISTS items_migration (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name        TEXT    NOT NULL,
-                    description TEXT    DEFAULT '',
-                    qty_on_hand INTEGER NOT NULL DEFAULT 0 CHECK(qty_on_hand >= 0),
-                    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
-                    updated_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+                    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name               TEXT    NOT NULL,
+                    description        TEXT    DEFAULT '',
+                    qty_on_hand        INTEGER NOT NULL DEFAULT 0 CHECK(qty_on_hand >= 0),
+                    original_total_pcs INTEGER NOT NULL DEFAULT 0 CHECK(original_total_pcs >= 0),
+                    created_at         TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                    updated_at         TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
                 )
             """)
             c.execute("""
-                INSERT INTO items_migration (id, name, description, qty_on_hand, created_at, updated_at)
-                SELECT id, name, description, COALESCE(qty_on_hand, 0), created_at, updated_at FROM items
+                INSERT INTO items_migration (id, name, description, qty_on_hand, original_total_pcs, created_at, updated_at)
+                SELECT id, name, description, COALESCE(qty_on_hand, 0), COALESCE(original_total_pcs, qty_on_hand, 0), created_at, updated_at FROM items
             """)
             c.execute("DROP TABLE items")
             c.execute("ALTER TABLE items_migration RENAME TO items")
@@ -557,15 +571,15 @@ def inv_delete_store(store_id):
 @app.route('/api/inventory/items', methods=['GET'])
 def inv_get_items():
     conn = get_inv_db()
-    rows = conn.execute("SELECT id, name, description, qty_on_hand, created_at, updated_at FROM items ORDER BY name ASC").fetchall()
+    rows = conn.execute("SELECT id, name, description, qty_on_hand, original_total_pcs, created_at, updated_at FROM items ORDER BY name ASC").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/inventory/all-items', methods=['GET'])
 def inv_get_all_items_with_qty():
-    """Return all items with main inventory quantity (On Hand), aggregated store allocation (On Store), and Total Pcs (On Hand + On Store)."""
+    """Return all items with main inventory quantity (On Hand), Original Total PCS, aggregated store allocation (On Store), and Total Pcs (On Hand + On Store)."""
     conn = get_inv_db()
-    items = conn.execute("SELECT id, name, description, qty_on_hand, updated_at FROM items ORDER BY name ASC").fetchall()
+    items = conn.execute("SELECT id, name, description, qty_on_hand, original_total_pcs, updated_at FROM items ORDER BY name ASC").fetchall()
     result = []
     for item in items:
         item_dict = dict(item)
@@ -600,7 +614,9 @@ def inv_get_all_items_with_qty():
                 max_last_updated = ad['last_updated']
                 
         qty_on_hand = int(item_dict.get('qty_on_hand') or 0)
+        original_total_pcs = int(item_dict.get('original_total_pcs') or 0)
         item_dict['qty_on_hand'] = qty_on_hand
+        item_dict['original_total_pcs'] = original_total_pcs
         item_dict['qty_on_store'] = total_on_store
         item_dict['total_pcs'] = qty_on_hand + total_on_store
         item_dict['last_updated'] = max_last_updated
@@ -615,9 +631,10 @@ def inv_get_all_items_with_qty():
 @app.route('/api/inventory/items', methods=['POST'])
 def inv_create_item():
     data = request.get_json() or {}
-    name        = (data.get('name') or '').strip()
-    description = (data.get('description') or '').strip()
-    qty_on_hand = data.get('qty_on_hand', 0)
+    name               = (data.get('name') or '').strip()
+    description        = (data.get('description') or '').strip()
+    qty_on_hand        = data.get('qty_on_hand', 0)
+    original_total_pcs = data.get('original_total_pcs')
     
     if not name:
         return jsonify({"error": "Item name is required."}), 400
@@ -625,11 +642,19 @@ def inv_create_item():
         qty_on_hand = max(0, int(qty_on_hand))
     except (ValueError, TypeError):
         return jsonify({"error": "Quantity on hand must be a non-negative integer."}), 400
+
+    if original_total_pcs is not None:
+        try:
+            original_total_pcs = max(0, int(original_total_pcs))
+        except (ValueError, TypeError):
+            return jsonify({"error": "Original Total PCS must be a non-negative integer."}), 400
+    else:
+        original_total_pcs = qty_on_hand
         
     conn = get_inv_db()
     c = conn.execute(
-        "INSERT INTO items (name, description, qty_on_hand) VALUES (?,?,?)",
-        (name, description, qty_on_hand)
+        "INSERT INTO items (name, description, qty_on_hand, original_total_pcs) VALUES (?,?,?,?)",
+        (name, description, qty_on_hand, original_total_pcs)
     )
     item_id = c.lastrowid
     conn.commit()
@@ -640,9 +665,10 @@ def inv_create_item():
 @app.route('/api/inventory/items/<int:item_id>', methods=['PUT'])
 def inv_update_item(item_id):
     data = request.get_json() or {}
-    name        = (data.get('name') or '').strip()
-    description = (data.get('description') or '').strip()
-    qty_on_hand = data.get('qty_on_hand')
+    name               = (data.get('name') or '').strip()
+    description        = (data.get('description') or '').strip()
+    qty_on_hand        = data.get('qty_on_hand')
+    original_total_pcs = data.get('original_total_pcs')
     
     if not name:
         return jsonify({"error": "Item name is required."}), 400
@@ -661,9 +687,18 @@ def inv_update_item(item_id):
     else:
         qty_on_hand = existing['qty_on_hand']
 
+    if original_total_pcs is not None:
+        try:
+            original_total_pcs = max(0, int(original_total_pcs))
+        except (ValueError, TypeError):
+            conn.close()
+            return jsonify({"error": "Original Total PCS must be a non-negative integer."}), 400
+    else:
+        original_total_pcs = existing['original_total_pcs'] if 'original_total_pcs' in existing.keys() else qty_on_hand
+
     conn.execute(
-        "UPDATE items SET name=?, description=?, qty_on_hand=?, updated_at=datetime('now','localtime') WHERE id=?",
-        (name, description, qty_on_hand, item_id)
+        "UPDATE items SET name=?, description=?, qty_on_hand=?, original_total_pcs=?, updated_at=datetime('now','localtime') WHERE id=?",
+        (name, description, qty_on_hand, original_total_pcs, item_id)
     )
     conn.commit()
     item = dict(conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone())
@@ -747,7 +782,7 @@ def inv_get_store_inventory():
     if store_id:
         rows = conn.execute("""
             SELECT si.id, si.id as inv_id, si.store_id, si.item_id, si.qty_on_store,
-                   i.qty_on_hand, (i.qty_on_hand + si.qty_on_store) as total_pcs,
+                   i.qty_on_hand, i.original_total_pcs, (i.qty_on_hand + si.qty_on_store) as total_pcs,
                    si.last_updated, i.name, i.description,
                    s.name as store_name
             FROM store_inventory si
@@ -759,7 +794,7 @@ def inv_get_store_inventory():
     else:
         rows = conn.execute("""
             SELECT si.id, si.id as inv_id, si.store_id, si.item_id, si.qty_on_store,
-                   i.qty_on_hand, (i.qty_on_hand + si.qty_on_store) as total_pcs,
+                   i.qty_on_hand, i.original_total_pcs, (i.qty_on_hand + si.qty_on_store) as total_pcs,
                    si.last_updated, i.name, i.description,
                    s.name as store_name
             FROM store_inventory si
@@ -815,7 +850,7 @@ def inv_create_store_inventory():
         conn.commit()
         row = conn.execute("""
             SELECT si.*, si.id as inv_id, i.name, i.description,
-                   i.qty_on_hand, (i.qty_on_hand + si.qty_on_store) as total_pcs, s.name as store_name
+                   i.qty_on_hand, i.original_total_pcs, (i.qty_on_hand + si.qty_on_store) as total_pcs, s.name as store_name
             FROM store_inventory si JOIN items i ON i.id=si.item_id JOIN stores s ON s.id=si.store_id
             WHERE si.id=?
         """, (inv_id,)).fetchone()
@@ -866,7 +901,7 @@ def inv_update_store_inventory(inv_id):
     conn.commit()
     row = conn.execute("""
         SELECT si.*, si.id as inv_id, i.name, i.description,
-               i.qty_on_hand, (i.qty_on_hand + si.qty_on_store) as total_pcs, s.name as store_name
+               i.qty_on_hand, i.original_total_pcs, (i.qty_on_hand + si.qty_on_store) as total_pcs, s.name as store_name
         FROM store_inventory si JOIN items i ON i.id=si.item_id JOIN stores s ON s.id=si.store_id
         WHERE si.id=?
     """, (inv_id,)).fetchone()
@@ -923,7 +958,7 @@ def inv_export_inventory(fmt):
             store_name = "Selected Stores"
 
         # Query all items and filter allocations to the selected store(s)
-        catalog_items = conn.execute("SELECT id, name, description, qty_on_hand, updated_at FROM items ORDER BY name ASC").fetchall()
+        catalog_items = conn.execute("SELECT id, name, description, qty_on_hand, original_total_pcs, updated_at FROM items ORDER BY name ASC").fetchall()
         for it in catalog_items:
             it_dict = dict(it)
             item_id = it_dict['id']
@@ -953,7 +988,9 @@ def inv_export_inventory(fmt):
             # Only include items that are assigned to the selected store(s)
             if len(breakdown) > 0:
                 qty_on_hand = int(it_dict.get('qty_on_hand') or 0)
+                original_total_pcs = int(it_dict.get('original_total_pcs') or 0)
                 it_dict['qty_on_hand'] = qty_on_hand
+                it_dict['original_total_pcs'] = original_total_pcs
                 it_dict['qty_on_store'] = total_on_store
                 it_dict['total_pcs'] = qty_on_hand + total_on_store
                 it_dict['last_updated'] = max_last_updated
@@ -961,7 +998,7 @@ def inv_export_inventory(fmt):
                 items.append(it_dict)
     else:
         # All items across all stores
-        catalog_items = conn.execute("SELECT id, name, description, qty_on_hand, updated_at FROM items ORDER BY name ASC").fetchall()
+        catalog_items = conn.execute("SELECT id, name, description, qty_on_hand, original_total_pcs, updated_at FROM items ORDER BY name ASC").fetchall()
         for it in catalog_items:
             it_dict = dict(it)
             item_id = it_dict['id']
@@ -989,7 +1026,9 @@ def inv_export_inventory(fmt):
                     max_last_updated = ad['last_updated']
 
             qty_on_hand = int(it_dict.get('qty_on_hand') or 0)
+            original_total_pcs = int(it_dict.get('original_total_pcs') or 0)
             it_dict['qty_on_hand'] = qty_on_hand
+            it_dict['original_total_pcs'] = original_total_pcs
             it_dict['qty_on_store'] = total_on_store
             it_dict['total_pcs'] = qty_on_hand + total_on_store
             it_dict['last_updated'] = max_last_updated

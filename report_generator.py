@@ -509,6 +509,16 @@ class InventoryReportGenerator:
             alignment=1
         )
 
+        table_text_original = ParagraphStyle(
+            'InvTableTextOriginal',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=colors.HexColor('#0284c7'),
+            alignment=1
+        )
+
         table_text_hand = ParagraphStyle(
             'InvTableTextHand',
             parent=styles['Normal'],
@@ -589,6 +599,7 @@ class InventoryReportGenerator:
 
         # 2. KPI Summary Cards
         total_items_count = len(items)
+        sum_original = sum(int(it.get('original_total_pcs') or 0) for it in items)
         sum_on_hand = sum(int(it.get('qty_on_hand') or 0) for it in items)
         sum_on_store = sum(int(it.get('qty_on_store') or 0) for it in items)
         sum_total_pcs = sum_on_hand + sum_on_store
@@ -626,6 +637,7 @@ class InventoryReportGenerator:
 
         headers = [
             Paragraph("Item Name", table_header),
+            Paragraph("Original Total<br/><font size='6' color='#cbd5e1'>Starting PCS</font>", table_header),
             Paragraph("On Hand<br/><font size='6' color='#cbd5e1'>Main Inventory</font>", table_header),
             Paragraph("On Store<br/><font size='6' color='#cbd5e1'>Allocated</font>", table_header),
             Paragraph("Total Pcs<br/><font size='6' color='#cbd5e1'>Hand + Store</font>", table_header),
@@ -638,6 +650,7 @@ class InventoryReportGenerator:
 
         for it in items:
             name = str(it.get('name') or '—')
+            original_pcs = int(it.get('original_total_pcs') or 0)
             on_hand = int(it.get('qty_on_hand') or 0)
             on_store = int(it.get('qty_on_store') or 0)
             total_pcs = int(it.get('total_pcs') or (on_hand + on_store))
@@ -656,6 +669,7 @@ class InventoryReportGenerator:
 
             table_rows.append([
                 Paragraph(name, table_text_bold),
+                Paragraph(str(original_pcs), table_text_original),
                 Paragraph(str(on_hand), table_text_hand),
                 store_display,
                 Paragraph(str(total_pcs), table_text_total),
@@ -666,6 +680,7 @@ class InventoryReportGenerator:
         # Summary Totals Row
         table_rows.append([
             Paragraph("<b>TOTALS</b>", table_text_bold),
+            Paragraph(f"<b>{sum_original}</b>", table_text_original),
             Paragraph(f"<b>{sum_on_hand}</b>", table_text_hand),
             Paragraph(f"<b>{sum_on_store}</b>", table_text_store),
             Paragraph(f"<b>{sum_total_pcs}</b>", table_text_total),
@@ -673,7 +688,7 @@ class InventoryReportGenerator:
             Paragraph("", table_text),
         ])
 
-        inv_table = Table(table_rows, colWidths=[200, 70, 100, 65, 60, 57])
+        inv_table = Table(table_rows, colWidths=[175, 60, 55, 80, 58, 62, 62])
         inv_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), PRIMARY),
             ('GRID', (0,0), (-1,-2), 0.5, BORDER_COLOR),
@@ -699,19 +714,20 @@ class InventoryReportGenerator:
 
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Inventory Report"
+        ws.title = "Inventory Stock"
         ws.views.sheetView[0].showGridLines = True
 
         # Styles
         font_title = Font(name="Segoe UI", size=14, bold=True, color="FFFFFF")
         font_subtitle = Font(name="Segoe UI", size=9, italic=True, color="64748B")
         font_kpi_label = Font(name="Segoe UI", size=8, bold=True, color="475569")
-        font_kpi_val = Font(name="Segoe UI", size=12, bold=True, color="0F172A")
-        font_header = Font(name="Segoe UI", size=9.5, bold=True, color="FFFFFF")
-        font_data = Font(name="Segoe UI", size=9, color="0F172A")
-        font_data_bold = Font(name="Segoe UI", size=9, bold=True, color="0F172A")
-        font_hand = Font(name="Segoe UI", size=9, bold=True, color="047857")
-        font_store = Font(name="Segoe UI", size=9, bold=True, color="B45309")
+        font_kpi_val = Font(name="Segoe UI", size=13, bold=True, color="0F172A")
+        font_header = Font(name="Segoe UI", size=10, bold=True, color="FFFFFF")
+        font_data = Font(name="Segoe UI", size=9, color="1E293B")
+        font_data_bold = Font(name="Segoe UI", size=9, bold=True, color="1E293B")
+        font_original = Font(name="Segoe UI", size=9, bold=True, color="0284C7")
+        font_hand = Font(name="Segoe UI", size=9, bold=True, color="059669")
+        font_store = Font(name="Segoe UI", size=9, bold=True, color="D97706")
         font_total = Font(name="Segoe UI", size=9, bold=True, color="4338CA")
         font_in_stock = Font(name="Segoe UI", size=8.5, bold=True, color="059669")
         font_low_stock = Font(name="Segoe UI", size=8.5, bold=True, color="DC2626")
@@ -741,7 +757,7 @@ class InventoryReportGenerator:
         )
 
         # 1. Title Banner
-        ws.merge_cells("A1:F1")
+        ws.merge_cells("A1:G1")
         c1 = ws["A1"]
         c1.value = "  Inventory Stock Report"
         c1.font = font_title
@@ -756,6 +772,7 @@ class InventoryReportGenerator:
         ws.row_dimensions[2].height = 18
 
         # 3. KPI Summary Blocks (Row 4 & 5)
+        sum_original = sum(int(it.get('original_total_pcs') or 0) for it in items)
         sum_on_hand = sum(int(it.get('qty_on_hand') or 0) for it in items)
         sum_on_store = sum(int(it.get('qty_on_store') or 0) for it in items)
         sum_total_pcs = sum_on_hand + sum_on_store
@@ -764,7 +781,7 @@ class InventoryReportGenerator:
             ("A", "B", "TOTAL CATALOG ITEMS", len(items)),
             ("C", "C", "TOTAL ON HAND (MAIN)", sum_on_hand),
             ("D", "D", "TOTAL ON STORE (ALLOCATED)", sum_on_store),
-            ("E", "F", "TOTAL PCS (OVERALL STOCK)", sum_total_pcs),
+            ("E", "G", "TOTAL PCS (OVERALL STOCK)", sum_total_pcs),
         ]
         for col_start, col_end, label, val in kpis:
             cell_range_lbl = f"{col_start}4:{col_end}4"
@@ -791,11 +808,12 @@ class InventoryReportGenerator:
         # 4. Table Headers (Row 7)
         headers = [
             ("A", "Item Name"),
-            ("B", "On Hand (Main)"),
-            ("C", "On Store (Allocated)"),
-            ("D", "Total Pcs"),
-            ("E", "Store Breakdown / Allocations"),
-            ("F", "Stock Alert"),
+            ("B", "Original Total PCS"),
+            ("C", "On Hand (Main)"),
+            ("D", "On Store (Allocated)"),
+            ("E", "Total Pcs"),
+            ("F", "Store Breakdown / Allocations"),
+            ("G", "Stock Alert"),
         ]
         for col, h in headers:
             cell = ws[f"{col}7"]
@@ -812,6 +830,7 @@ class InventoryReportGenerator:
 
         for it in items:
             name = str(it.get('name') or '—')
+            original_pcs = int(it.get('original_total_pcs') or 0)
             on_hand = int(it.get('qty_on_hand') or 0)
             on_store = int(it.get('qty_on_store') or 0)
             total_pcs = int(it.get('total_pcs') or (on_hand + on_store))
@@ -829,27 +848,31 @@ class InventoryReportGenerator:
             ws[f"A{row_idx}"].font = font_data_bold
             ws[f"A{row_idx}"].alignment = align_left
 
-            ws[f"B{row_idx}"] = on_hand
-            ws[f"B{row_idx}"].font = font_hand
+            ws[f"B{row_idx}"] = original_pcs
+            ws[f"B{row_idx}"].font = font_original
             ws[f"B{row_idx}"].alignment = align_right
 
-            ws[f"C{row_idx}"] = on_store
-            ws[f"C{row_idx}"].font = font_store
+            ws[f"C{row_idx}"] = on_hand
+            ws[f"C{row_idx}"].font = font_hand
             ws[f"C{row_idx}"].alignment = align_right
 
-            ws[f"D{row_idx}"] = total_pcs
-            ws[f"D{row_idx}"].font = font_total
+            ws[f"D{row_idx}"] = on_store
+            ws[f"D{row_idx}"].font = font_store
             ws[f"D{row_idx}"].alignment = align_right
 
-            ws[f"E{row_idx}"] = bd_text
-            ws[f"E{row_idx}"].font = font_data
-            ws[f"E{row_idx}"].alignment = align_wrap
+            ws[f"E{row_idx}"] = total_pcs
+            ws[f"E{row_idx}"].font = font_total
+            ws[f"E{row_idx}"].alignment = align_right
 
-            ws[f"F{row_idx}"] = alert_text
-            ws[f"F{row_idx}"].font = font_low_stock if is_low else font_in_stock
-            ws[f"F{row_idx}"].alignment = align_center
+            ws[f"F{row_idx}"] = bd_text
+            ws[f"F{row_idx}"].font = font_data
+            ws[f"F{row_idx}"].alignment = align_wrap
 
-            for col_letter in ["A","B","C","D","E","F"]:
+            ws[f"G{row_idx}"] = alert_text
+            ws[f"G{row_idx}"].font = font_low_stock if is_low else font_in_stock
+            ws[f"G{row_idx}"].alignment = align_center
+
+            for col_letter in ["A","B","C","D","E","F","G"]:
                 c = ws[f"{col_letter}{row_idx}"]
                 c.border = thin_border
                 if row_idx % 2 == 0:
@@ -864,22 +887,26 @@ class InventoryReportGenerator:
         ws[f"A{tot_row}"].font = font_data_bold
         ws[f"A{tot_row}"].alignment = align_left
 
-        ws[f"B{tot_row}"] = sum_on_hand
-        ws[f"B{tot_row}"].font = font_hand
+        ws[f"B{tot_row}"] = sum_original
+        ws[f"B{tot_row}"].font = font_original
         ws[f"B{tot_row}"].alignment = align_right
 
-        ws[f"C{tot_row}"] = sum_on_store
-        ws[f"C{tot_row}"].font = font_store
+        ws[f"C{tot_row}"] = sum_on_hand
+        ws[f"C{tot_row}"].font = font_hand
         ws[f"C{tot_row}"].alignment = align_right
 
-        ws[f"D{tot_row}"] = sum_total_pcs
-        ws[f"D{tot_row}"].font = font_total
+        ws[f"D{tot_row}"] = sum_on_store
+        ws[f"D{tot_row}"].font = font_store
         ws[f"D{tot_row}"].alignment = align_right
 
-        ws[f"E{tot_row}"] = ""
-        ws[f"F{tot_row}"] = ""
+        ws[f"E{tot_row}"] = sum_total_pcs
+        ws[f"E{tot_row}"].font = font_total
+        ws[f"E{tot_row}"].alignment = align_right
 
-        for col_letter in ["A","B","C","D","E","F"]:
+        ws[f"F{tot_row}"] = ""
+        ws[f"G{tot_row}"] = ""
+
+        for col_letter in ["A","B","C","D","E","F","G"]:
             c = ws[f"{col_letter}{tot_row}"]
             c.border = double_bottom_border
             c.fill = fill_totals
@@ -888,12 +915,13 @@ class InventoryReportGenerator:
 
         # 7. Column Auto-fit
         col_widths = {
-            "A": 38,
+            "A": max(26, max((len(str(it.get('name') or '')) for it in items), default=12) + 4),
             "B": 18,
-            "C": 22,
-            "D": 16,
-            "E": 42,
-            "F": 16,
+            "C": 15,
+            "D": 18,
+            "E": 14,
+            "F": 34,
+            "G": 14
         }
         for col_letter, width in col_widths.items():
             ws.column_dimensions[col_letter].width = width

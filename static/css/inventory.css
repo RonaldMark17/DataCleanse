@@ -575,6 +575,7 @@
 }
 
 .inv-qty { font-weight: 700; font-size: 0.95rem; }
+.inv-qty-original { color: #38bdf8; }
 .inv-qty-hand  { color: var(--accent-emerald, #10b981); }
 .inv-qty-store { color: var(--accent-amber, #f59e0b); }
 .inv-qty-total { color: #818cf8; }

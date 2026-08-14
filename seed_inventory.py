@@ -64,8 +64,8 @@ for item_name in ITEMS:
         skipped += 1
     else:
         cur = conn.execute(
-            "INSERT INTO items (name, description, qty_on_hand) VALUES (?, ?, ?)",
-            (item_name, "", 0)
+            "INSERT INTO items (name, description, qty_on_hand, original_total_pcs) VALUES (?, ?, ?, ?)",
+            (item_name, "", 0, 0)
         )
         item_id = cur.lastrowid
         print(f"  [add]  Created item: {item_name}")
