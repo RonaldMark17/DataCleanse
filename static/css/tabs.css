@@ -596,3 +596,47 @@ body.light-theme .auto-clean-box {
     display: flex;
     gap: 10px;
 }
+
+/* ── Responsive Enhancements ────────────────────────────────────────────── */
+@media (max-width: 992px) {
+    .app-main { padding: 1rem 1.2rem; }
+}
+
+@media (max-width: 768px) {
+    .app-main { padding: 0.8rem 0.6rem; }
+    .nav-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 6px;
+        scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+        flex-shrink: 0;
+        padding: 8px 12px;
+        font-size: 0.82rem;
+    }
+    .table-controls-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .search-box {
+        min-width: 100%;
+        width: 100%;
+    }
+    .export-buttons {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .export-buttons .btn {
+        flex: 1;
+        justify-content: center;
+    }
+    .pagination-bar {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+}

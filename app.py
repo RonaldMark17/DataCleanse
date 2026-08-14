@@ -532,22 +532,55 @@ def inv_get_items():
 
 @app.route('/api/inventory/all-items', methods=['GET'])
 def inv_get_all_items_with_qty():
-    """Return all items with aggregated quantities across all stores."""
+    """Return all items with aggregated quantities across all stores and their store breakdown."""
     conn = get_inv_db()
-    rows = conn.execute("""
-        SELECT i.id, i.name, i.sku, i.category, i.unit, i.description,
-               COALESCE(SUM(si.qty_on_hand), 0) as qty_on_hand,
-               COALESCE(SUM(si.qty_on_store), 0) as qty_on_store,
-               MAX(si.last_updated) as last_updated,
-               MAX(si.id) as inv_id,
-               MAX(si.store_id) as store_id
-        FROM items i
-        LEFT JOIN store_inventory si ON si.item_id = i.id
-        GROUP BY i.id
-        ORDER BY i.name ASC
-    """).fetchall()
+    items = conn.execute("SELECT id, name, sku, category, unit, description FROM items ORDER BY name ASC").fetchall()
+    result = []
+    for item in items:
+        item_dict = dict(item)
+        item_id = item_dict['id']
+        assignments = conn.execute("""
+            SELECT si.id as inv_id, si.store_id, s.name as store_name, si.qty_on_hand, si.qty_on_store, si.last_updated
+            FROM store_inventory si
+            JOIN stores s ON s.id = si.store_id
+            WHERE si.item_id = ?
+            ORDER BY s.name ASC
+        """, (item_id,)).fetchall()
+        
+        breakdown = []
+        total_on_hand = 0
+        total_on_store = 0
+        max_last_updated = None
+        max_inv_id = None
+        max_store_id = None
+        
+        for a in assignments:
+            ad = dict(a)
+            breakdown.append({
+                "inv_id": ad['inv_id'],
+                "store_id": ad['store_id'],
+                "name": ad['store_name'],
+                "qty": ad['qty_on_store'],
+                "qty_on_hand": ad['qty_on_hand'],
+                "qty_on_store": ad['qty_on_store']
+            })
+            total_on_hand += ad['qty_on_hand']
+            total_on_store += ad['qty_on_store']
+            max_inv_id = ad['inv_id']
+            max_store_id = ad['store_id']
+            if ad['last_updated'] and (not max_last_updated or ad['last_updated'] > max_last_updated):
+                max_last_updated = ad['last_updated']
+                
+        item_dict['qty_on_hand'] = total_on_hand
+        item_dict['qty_on_store'] = total_on_store
+        item_dict['last_updated'] = max_last_updated
+        item_dict['inv_id'] = max_inv_id
+        item_dict['store_id'] = max_store_id
+        item_dict['store_breakdown'] = breakdown
+        result.append(item_dict)
+        
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(result)
 
 @app.route('/api/inventory/items', methods=['POST'])
 def inv_create_item():
@@ -605,6 +638,51 @@ def inv_update_item(item_id):
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({"error": f"An item with SKU '{sku}' already exists."}), 409
+
+@app.route('/api/inventory/items/<int:item_id>/store-assignments', methods=['POST'])
+def inv_sync_store_assignments(item_id):
+    data = request.get_json() or {}
+    assignments = data.get('assignments', [])
+    conn = get_inv_db()
+    existing_item = conn.execute("SELECT id FROM items WHERE id=?", (item_id,)).fetchone()
+    if not existing_item:
+        conn.close()
+        return jsonify({"error": "Item not found."}), 404
+        
+    current_rows = conn.execute("SELECT id, store_id FROM store_inventory WHERE item_id=?", (item_id,)).fetchall()
+    current_map = {row['store_id']: row['id'] for row in current_rows}
+    
+    new_store_ids = set()
+    for assign in assignments:
+        try:
+            store_id = int(assign.get('store_id'))
+            qty_store = int(assign.get('qty_on_store', assign.get('qty', 0)))
+            qty_hand = int(assign.get('qty_on_hand', qty_store))
+        except (ValueError, TypeError):
+            continue
+        
+        if qty_store < 0 or qty_hand < 0:
+            continue
+            
+        new_store_ids.add(store_id)
+        if store_id in current_map:
+            conn.execute(
+                "UPDATE store_inventory SET qty_on_hand=?, qty_on_store=?, last_updated=datetime('now','localtime') WHERE id=?",
+                (qty_hand, qty_store, current_map[store_id])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO store_inventory (store_id, item_id, qty_on_hand, qty_on_store) VALUES (?,?,?,?)",
+                (store_id, item_id, qty_hand, qty_store)
+            )
+            
+    for s_id, inv_id in current_map.items():
+        if s_id not in new_store_ids:
+            conn.execute("DELETE FROM store_inventory WHERE id=?", (inv_id,))
+            
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": "Store assignments updated successfully."})
 
 @app.route('/api/inventory/items/<int:item_id>', methods=['DELETE'])
 def inv_delete_item(item_id):

@@ -2,6 +2,16 @@
  * DataCleanse & Applied Analytics Studio - Client JavaScript Logic
  */
 
+function escHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 let state = {
     datasetName: "",
     totalRows: 0,
@@ -277,17 +287,46 @@ async function loadOverview() {
 
         // Render Audit Table
         const tbody = document.getElementById('auditTableBody');
-        tbody.innerHTML = data.audit.columns.map(col => `
-            <tr>
-                <td><strong>${col.column}</strong></td>
-                <td><code class="badge-type">${col.dtype}</code></td>
-                <td class="${col.missing_count > 0 ? 'text-amber' : ''}">${col.missing_count}</td>
-                <td>${col.missing_pct}%</td>
-                <td>${col.unique_count}</td>
-                <td>${col.outliers_count > 0 ? `<span class="text-rose">${col.outliers_count}</span>` : '0'}</td>
-                <td><small class="text-muted">${col.sample_values.join(', ')}</small></td>
-            </tr>
-        `).join('');
+        if (tbody && data.audit && Array.isArray(data.audit.columns)) {
+            tbody.innerHTML = data.audit.columns.map(col => {
+                const dt = String(col.dtype || '').toLowerCase();
+                let typeBadge = `<span class="type-badge type-slate">${escHtml(col.dtype)}</span>`;
+                if (dt.includes('str') || dt.includes('object')) {
+                    typeBadge = `<span class="type-badge type-text"><i class="fa-solid fa-font"></i> text</span>`;
+                } else if (dt.includes('int') || dt.includes('float') || dt.includes('num')) {
+                    typeBadge = `<span class="type-badge type-num"><i class="fa-solid fa-hashtag"></i> number</span>`;
+                } else if (dt.includes('date') || dt.includes('time')) {
+                    typeBadge = `<span class="type-badge type-date"><i class="fa-regular fa-calendar-days"></i> date</span>`;
+                }
+
+                const missingBadge = col.missing_count > 0
+                    ? `<span class="badge-status badge-warn"><i class="fa-solid fa-triangle-exclamation"></i> ${col.missing_count}</span>`
+                    : `<span class="badge-status badge-ok"><i class="fa-solid fa-check"></i> 0</span>`;
+
+                const pctVal = typeof col.missing_pct !== 'undefined' ? col.missing_pct : '0';
+                const missingPctText = col.missing_count > 0
+                    ? `<strong style="color:var(--accent-amber);">${pctVal}%</strong>`
+                    : `<span style="color:var(--text-muted);">0%</span>`;
+
+                const outlierBadge = col.outliers_count > 0
+                    ? `<span class="badge-status badge-danger"><i class="fa-solid fa-circle-exclamation"></i> ${col.outliers_count}</span>`
+                    : `<span style="color:var(--text-muted);">0</span>`;
+
+                const sampleText = Array.isArray(col.sample_values) ? col.sample_values.join(', ') : String(col.sample_values || '');
+
+                return `
+                    <tr>
+                        <td><strong>${escHtml(col.column)}</strong></td>
+                        <td>${typeBadge}</td>
+                        <td>${missingBadge}</td>
+                        <td>${missingPctText}</td>
+                        <td><span class="unique-count-tag">${col.unique_count}</span></td>
+                        <td>${outlierBadge}</td>
+                        <td><div class="sample-preview-cell" dir="auto" title="${escHtml(sampleText)}">${escHtml(sampleText)}</div></td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
     } catch (err) {
         console.error("Overview error:", err);

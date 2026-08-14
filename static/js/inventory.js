@@ -10,6 +10,7 @@ let INV = {
     filteredInventory: [],
     selectedStoreId: null,
     editingInvId: null,   // store_inventory.id being edited
+    editingItemId: null,  // items.id being edited
     editingStoreId: null,
     searchQuery: '',
     // pagination state for inventory listing
@@ -327,9 +328,14 @@ function toggleStoreHidden(safeKey) {
 // Update total assigned and remaining shown in the item modal
 function updateAssignTotals() {
     const handEl = document.getElementById('invQtyOnHand');
-    const hand = handEl ? Number(handEl.value || 0) : 0;
     const assigns = collectStoreAssignRows();
     const totalAssigned = assigns.reduce((s, a) => s + (Number(a.qty) || 0), 0);
+
+    let hand = handEl ? Number(handEl.value || 0) : 0;
+    if (handEl && hand < totalAssigned) {
+        handEl.value = String(totalAssigned);
+        hand = totalAssigned;
+    }
     const remaining = Math.max(0, hand - totalAssigned);
     const totalEl = document.getElementById('invTotalAssigned');
     const remEl = document.getElementById('invRemaining');
@@ -648,11 +654,15 @@ function renderInventoryTable() {
             ? `<span class="inv-stock-badge inv-stock-low"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock</span>`
             : `<span class="inv-stock-badge inv-stock-ok"><i class="fa-solid fa-circle-check"></i> In Stock</span>`;
 
-        // Render per-store breakdown if provided by API: expect r.store_breakdown = [{ name, qty }, ...]
-        let storeBreakdownHtml = '';
+        // Render per-store breakdown cleanly
+        let storeColContent = '';
         if (Array.isArray(r.store_breakdown) && r.store_breakdown.length > 0) {
             const productKey = r.inv_id || r.id || r.item_id || r.name || '';
-            storeBreakdownHtml = renderStoreChips(r.store_breakdown, productKey);
+            storeColContent = renderStoreChips(r.store_breakdown, productKey);
+        } else if (r.qty_on_store > 0) {
+            storeColContent = `<span class="inv-qty inv-qty-store">${r.qty_on_store}</span>`;
+        } else {
+            storeColContent = `<span style="color:var(--text-muted);font-size:0.82rem;">&mdash;</span>`;
         }
 
         return `
@@ -663,10 +673,7 @@ function renderInventoryTable() {
             </td>
             <td><span class="inv-unit-badge">${escHtml(r.unit || 'pcs')}</span></td>
             <td><span class="inv-qty inv-qty-hand">${r.qty_on_hand}</span></td>
-            <td>
-                <span class="inv-qty inv-qty-store">${r.qty_on_store}</span>
-                ${storeBreakdownHtml}
-            </td>
+            <td>${storeColContent}</td>
             <td><span class="inv-qty inv-qty-total">${totalPcs}</span></td>
             <td>${stockBadge}</td>
             <td><span class="inv-last-updated">${fmtDate(r.last_updated)}</span></td>
@@ -795,6 +802,7 @@ function updateStats() {
 // ── Add / Edit Item Modal ─────────────────────────────────────────────────
 function openAddItemModal() {
     INV.editingInvId = null;
+    INV.editingItemId = null;
     const titleEl = document.getElementById('itemModalTitle'); if (titleEl) titleEl.textContent = 'Add Item';
     const iconEl = document.getElementById('itemModalIcon'); if (iconEl) iconEl.className = 'fa-solid fa-plus';
 
@@ -810,7 +818,6 @@ function openAddItemModal() {
     const elUnit = document.getElementById('invItemUnit'); if (elUnit) elUnit.value = 'pcs';
     const elDesc = document.getElementById('invItemDesc'); if (elDesc) elDesc.value = '';
     const elHand = document.getElementById('invQtyOnHand'); if (elHand) elHand.value = '0';
-    const elStore = document.getElementById('invQtyOnStore'); if (elStore) elStore.value = '0';
 
     // Pre-select current store filter if one is active
     populateStoreAssignDropdown(INV.selectedStoreId || '');
@@ -820,11 +827,9 @@ function openAddItemModal() {
     if (assignList) {
         assignList.innerHTML = '';
         if (INV.selectedStoreId) {
-            // If user is adding while a store filter is active, prefill that store as an assignment row
             renderStoreAssignRows([{ store_id: INV.selectedStoreId, qty: 0 }]);
         } else {
-            // For initial create, do not force a store assignment — user may assign stores later via Edit
-            // Leave assignList empty and let the user click [+ Assign Another Store] when ready
+            addStoreAssignRow();
         }
     }
 
@@ -838,46 +843,48 @@ function openAddItemModal() {
 }
 
 function openEditInvModal(invId) {
-    // Inventory array may be either store-specific records (id = store_inventory.id)
-    // or aggregated "all-items" rows (id = item.id, inv_id = store_inventory.id).
-    // Accept either: normalize the provided id and find a matching record by id or inv_id.
     const normId = normalizeInvId(invId);
     let rec = null;
     if (normId) {
-        rec = INV.inventory.find(r => String(r.id) === String(normId) || String(r.inv_id) === String(normId));
+        rec = INV.inventory.find(r => String(r.id) === String(normId) || String(r.inv_id) === String(normId) || String(r.item_id) === String(normId));
     }
-    // As a fallback, attempt to match the raw value if normalization failed
     if (!rec && Array.isArray(INV.inventory)) {
-        rec = INV.inventory.find(r => String(r.id) === String(invId) || String(r.inv_id) === String(invId));
+        rec = INV.inventory.find(r => String(r.id) === String(invId) || String(r.inv_id) === String(invId) || String(r.item_id) === String(invId));
     }
     if (!rec) return;
-    INV.editingInvId = normId || invId;
 
-    const titleEl = document.getElementById('itemModalTitle'); if (titleEl) titleEl.textContent = 'Edit Quantities';
+    const itemId = (rec.id && !rec.item_id) ? rec.id : (rec.item_id || rec.id);
+    INV.editingInvId = normId || invId;
+    INV.editingItemId = itemId;
+
+    const titleEl = document.getElementById('itemModalTitle'); if (titleEl) titleEl.textContent = 'Edit Item & Store Assignments';
     const iconEl = document.getElementById('itemModalIcon'); if (iconEl) iconEl.className = 'fa-solid fa-pen-to-square';
 
-    // Hide new-item fields, show readonly name
+    // Show name section so user can edit item details or store assignments
     const nameSection = document.getElementById('itemNameSection');
     const editDisplay = document.getElementById('itemEditNameDisplay');
-    if (nameSection) nameSection.style.display = 'none';
-    if (editDisplay) editDisplay.style.display = 'block';
-    const disp = document.getElementById('invItemDisplayName'); if (disp) disp.textContent = rec.name;
+    if (nameSection) nameSection.style.display = 'block';
+    if (editDisplay) editDisplay.style.display = 'none';
 
-    const handEl = document.getElementById('invQtyOnHand'); if (handEl) handEl.value = (rec.qty_on_hand || 0);
-    const storeEl = document.getElementById('invQtyOnStore'); if (storeEl) storeEl.value = (rec.qty_on_store || 0);
+    const elName = document.getElementById('invItemName'); if (elName) elName.value = rec.name || '';
+    const elUnit = document.getElementById('invItemUnit'); if (elUnit) elUnit.value = rec.unit || 'pcs';
+    const elDesc = document.getElementById('invItemDesc'); if (elDesc) elDesc.value = rec.description || '';
+    const elHand = document.getElementById('invQtyOnHand'); if (elHand) elHand.value = (rec.qty_on_hand || 0);
 
     // Render store assignment rows for editing
     const assignList = document.getElementById('invStoreAssignList');
     if (assignList) {
         assignList.innerHTML = '';
         if (Array.isArray(rec.store_breakdown) && rec.store_breakdown.length > 0) {
-            // API provided a breakdown: each element may have { name, qty } or { store_id, qty }
-            const assigns = rec.store_breakdown.map(sb => ({ store_id: sb.store_id || null, name: sb.name || null, qty: sb.qty || (sb.qty_on_store || 0) }));
+            const assigns = rec.store_breakdown.map(sb => ({
+                store_id: sb.store_id || null,
+                name: sb.name || null,
+                qty: sb.qty || sb.qty_on_store || 0
+            }));
             renderStoreAssignRows(assigns);
         } else if (rec.store_id) {
             addStoreAssignRow({ store_id: rec.store_id, qty: rec.qty_on_store || rec.qty_on_hand || 0 });
         } else {
-            // No store info — leave list empty for manual assignment
             addStoreAssignRow();
         }
     }
@@ -894,196 +901,118 @@ function openEditInvModal(invId) {
 async function saveNewItem() {
     invClearErrors('itemForm');
 
+    const nameEl = document.getElementById('invItemName');
+    const name = nameEl ? (nameEl.value || '').trim() : '';
+    const unitEl = document.getElementById('invItemUnit');
+    const unit = unitEl ? unitEl.value : 'pcs';
+    const descEl = document.getElementById('invItemDesc');
+    const desc = descEl ? (descEl.value || '').trim() : '';
+
     const qtyOnHandEl  = document.getElementById('invQtyOnHand');
-    const qtyOnStoreEl = document.getElementById('invQtyOnStore');
-    const qtyOnHand  = qtyOnHandEl ? qtyOnHandEl.value : '';
-    const qtyOnStore = qtyOnStoreEl ? qtyOnStoreEl.value : '';
+    const qtyOnHand  = qtyOnHandEl ? qtyOnHandEl.value : '0';
+
     let valid = true;
-
-    // Validate quantities
-    if (qtyOnHand === '' || isNaN(Number(qtyOnHand)) || Number(qtyOnHand) < 0) {
-        invShowError('invQtyOnHand', 'invQtyOnHandErr', 'Must be a non-negative number.');
-        valid = false;
-    }
-    if (qtyOnStore === '' || isNaN(Number(qtyOnStore)) || Number(qtyOnStore) < 0) {
-        invShowError('invQtyOnStore', 'invQtyOnStoreErr', 'Must be a non-negative number.');
-        valid = false;
-    }
-
-    // Get selected store from the modal dropdown
-    const storeAssignSel = document.getElementById('invStoreAssign');
-    const modalStoreId = storeAssignSel ? (storeAssignSel.value ? parseInt(storeAssignSel.value) : null) : INV.selectedStoreId;
-
-    if (INV.editingInvId) {
-        // Editing existing record — update store record and adjust product on_hand if needed
-        console.log('saveNewItem() - edit path. editingInvId=', INV.editingInvId, 'qtyOnHand=', qtyOnHand, 'qtyOnStore=', qtyOnStore);
-        if (!valid) return;
-        const btn = document.getElementById('btnSaveItem');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; }
-        try {
-            // Find the original inventory record to compute deltas. Be forgiving about id types and field names.
-            let rec = INV.inventory.find(r => r.id === INV.editingInvId || (r.inv_id && r.inv_id === INV.editingInvId));
-            if (!rec) {
-                // Try loose matching (string vs number, or item_id match)
-                rec = INV.inventory.find(r => String(r.id) === String(INV.editingInvId) || String(r.inv_id || '') === String(INV.editingInvId) || String(r.item_id || '') === String(INV.editingInvId));
-            }
-
-            if (!rec) {
-                console.warn('saveNewItem: could not locate inventory record for id', INV.editingInvId);
-                invToast('Unable to locate the inventory record to edit. Please refresh and try again.', 'error');
-                // reset UI
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
-                return;
-            }
-
-            // Determine the store-inventory id to update. Prefer rec.inv_id, then rec.id, then editingInvId
-            const storeInvIdCandidate = rec.inv_id || rec.id || INV.editingInvId;
-            const storeInvId = normalizeInvId(storeInvIdCandidate);
-            if (!storeInvId) {
-                console.error('Unable to determine numeric store-inventory id from', storeInvIdCandidate);
-                invToast('Unable to determine the inventory record to update. Please refresh the page and try again.', 'error');
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
-                return;
-            }
-            console.log('saveNewItem: updating store-inventory id=', storeInvId);
-
-            // Update the specific store inventory record
-            const res = await fetch(`/api/inventory/store-inventory/${storeInvId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qty_on_hand: parseInt(qtyOnHand), qty_on_store: parseInt(qtyOnStore) })
-            });
-
-            let data = {};
-            try { data = await res.json(); } catch(e) { data = {}; }
-
-            if (!res.ok) {
-                console.error('store-inventory update failed', res.status, data);
-                invToast(data.error || (`Update failed (status ${res.status}).`), 'error');
-            } else {
-                // If this edit changes the per-store quantity, adjust the product's global on_hand accordingly.
-                // previous store qty may be in rec.qty_on_store or inside rec.store_breakdown
-                const prevStoreQty = (rec && (rec.qty_on_store || 0));
-                const newStoreQty = parseInt(qtyOnStore) || 0;
-                const delta = newStoreQty - (prevStoreQty || 0); // positive => more assigned to store, so reduce global on_hand
-
-                // Determine product id and current product on_hand value
-                const productId = rec ? (rec.item_id || rec.product_id || rec.inv_item_id || rec.id || null) : null;
-                const currentOnHand = rec ? (rec.qty_on_hand || rec.on_hand || 0) : 0;
-
-                // Server does not store a dedicated "on_hand" field on the items table.
-                // The store-inventory update above is authoritative; reload data and show success.
-                invToast('Quantities updated.', 'success');
-
-                closeModal('itemModal');
-                INV.selectedStoreId ? loadInventory(INV.selectedStoreId) : loadAllItems();
-                updateStats();
-            }
-        } catch (e) {
-            invToast('Network error. Please try again.', 'error');
-            console.error('saveNewItem - edit error', e);
-        } finally {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
-        }
-        return;
-    }
-
-    // Adding new item — name is required
-    const name = (document.getElementById('invItemName').value || '').trim();
-    const unit  = document.getElementById('invItemUnit').value || 'pcs';
-    const desc  = (document.getElementById('invItemDesc').value || '').trim();
-
     if (!name) {
         invShowError('invItemName', 'invItemNameErr', 'Item name is required.');
         valid = false;
     }
+    if (qtyOnHand === '' || isNaN(Number(qtyOnHand)) || Number(qtyOnHand) < 0) {
+        invShowError('invQtyOnHand', 'invQtyOnHandErr', 'Must be a non-negative number.');
+        valid = false;
+    }
     if (!valid) return;
 
+    const assignRows = collectStoreAssignRows();
+
     const btn = document.getElementById('btnSaveItem');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; }
 
     try {
-        // Step 1: Create the item in the catalog
-        const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-        const itemRes = await fetch('/api/inventory/items', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, sku, unit, description: desc })
-        });
-        const itemData = await itemRes.json();
-        if (!itemRes.ok) {
-            invToast(itemData.error || 'Failed to create item.', 'error');
-            return;
-        }
-        const newItemId = itemData.id;
-
-        // Step 2: If store assignment rows are present, create store_inventory records for each
-        const assignRows = collectStoreAssignRows();
-        if (assignRows.length > 0) {
-            let failures = 0;
-            for (const ar of assignRows) {
-                try {
-                    const invRes = await fetch('/api/inventory/store-inventory', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            store_id: ar.store_id,
-                            item_id: newItemId,
-                            // Treat per-store qty as both on_store and on_hand for that store record
-                            qty_on_hand: parseInt(ar.qty || 0),
-                            qty_on_store: parseInt(ar.qty || 0)
-                        })
-                    });
-                    const invData = await (async () => {
-                        try { return await invRes.json(); } catch (e) { return { error: 'Invalid response' }; }
-                    })();
-                    if (!invRes.ok) {
-                        failures++;
-                        console.warn('Store assignment failed for store_id', ar.store_id, invData);
-                    }
-                } catch (e) {
-                    failures++;
-                    console.warn('Network error assigning store', ar.store_id, e);
+        if (INV.editingItemId || INV.editingInvId) {
+            // EDIT PATH
+            let itemId = INV.editingItemId;
+            if (!itemId) {
+                let rec = INV.inventory.find(r => r.id === INV.editingInvId || (r.inv_id && r.inv_id === INV.editingInvId));
+                if (!rec) {
+                    rec = INV.inventory.find(r => String(r.id) === String(INV.editingInvId) || String(r.inv_id || '') === String(INV.editingInvId) || String(r.item_id || '') === String(INV.editingInvId));
                 }
+                itemId = rec ? ((rec.id && !rec.item_id) ? rec.id : (rec.item_id || rec.id)) : null;
             }
-            if (failures) {
-                invToast('Item created, but one or more store assignments failed.', 'warning');
+
+            if (!itemId) {
+                invToast('Unable to locate the item to edit. Please refresh and try again.', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
+                return;
+            }
+
+            // Step 1: Update item catalog details (name, unit, description)
+            const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+            const itemRes = await fetch(`/api/inventory/items/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, unit, description: desc, sku })
+            });
+            if (!itemRes.ok) {
+                const itemData = await itemRes.json().catch(() => ({}));
+                invToast(itemData.error || 'Failed to update item details.', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
+                return;
+            }
+
+            // Step 2: Sync store assignments for this item
+            const assignRes = await fetch(`/api/inventory/items/${itemId}/store-assignments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignments: assignRows })
+            });
+            if (!assignRes.ok) {
+                const assignData = await assignRes.json().catch(() => ({}));
+                invToast(assignData.error || 'Failed to update store assignments.', 'error');
+            } else {
+                invToast('Item and store assignments updated successfully!', 'success');
+                closeModal('itemModal');
+                await loadItems();
+                INV.selectedStoreId ? loadInventory(INV.selectedStoreId) : loadAllItems();
+                updateStats();
+            }
+        } else {
+            // CREATE PATH
+            const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+            const itemRes = await fetch('/api/inventory/items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, sku, unit, description: desc })
+            });
+            const itemData = await itemRes.json();
+            if (!itemRes.ok) {
+                invToast(itemData.error || 'Failed to create item.', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
+                return;
+            }
+            const newItemId = itemData.id;
+
+            // Sync store assignments for new item
+            const assignRes = await fetch(`/api/inventory/items/${newItemId}/store-assignments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignments: assignRows })
+            });
+            if (!assignRes.ok) {
+                invToast('Item created, but store assignments failed.', 'warning');
             } else {
                 invToast('Item added and assigned to stores!', 'success');
             }
-        } else if (modalStoreId) {
-            // Backwards-compat: single-store select was used
-            const invRes = await fetch('/api/inventory/store-inventory', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    store_id: modalStoreId,
-                    item_id: newItemId,
-                    qty_on_hand: parseInt(qtyOnHand),
-                    qty_on_store: parseInt(qtyOnStore)
-                })
-            });
-            const invData = await (async () => { try { return await invRes.json(); } catch (e) { return { error: 'Invalid response' }; } })();
-            if (!invRes.ok) {
-                invToast(`Item created, but store assignment failed: ${invData.error || ''}`, 'warning');
-            } else {
-                invToast('Item added and assigned to store!', 'success');
-            }
-        } else {
-            invToast('Item added to catalog.', 'success');
+
+            closeModal('itemModal');
+            await loadItems();
+            INV.selectedStoreId ? loadInventory(INV.selectedStoreId) : loadAllItems();
+            updateStats();
         }
-
-        closeModal('itemModal');
-        await loadItems();
-        INV.selectedStoreId ? loadInventory(INV.selectedStoreId) : loadAllItems();
-        updateStats();
-
     } catch (e) {
+        console.error('saveNewItem error', e);
         invToast('Network error. Please try again.', 'error');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save';
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
     }
 }
 

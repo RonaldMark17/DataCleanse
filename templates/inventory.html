@@ -12,8 +12,8 @@
     <style>
     select.inv-form-control option,select.inv-store-select option{background:var(--bg-card);color:var(--text-primary)}
     /* Store chips */
-    .inv-store-chip{display:inline-block;background:rgba(255,255,255,0.04);color:var(--text-primary);padding:6px 8px;border-radius:999px;font-size:0.78rem;margin-right:6px;margin-bottom:4px;border:1px solid rgba(255,255,255,0.04)}
-    .inv-store-chip strong{font-weight:600;margin-right:6px}
+    .inv-store-chip{display:inline-flex;align-items:center;background:rgba(99,102,241,0.08);color:var(--text-primary);padding:3px 9px;border-radius:12px;font-size:0.76rem;margin-right:4px;margin-bottom:2px;border:1px solid rgba(99,102,241,0.2)}
+    .inv-store-chip strong{font-weight:600;margin-right:4px;color:#a5b4fc}
     .inv-store-more{display:inline-block;cursor:pointer;color:var(--text-muted);font-size:0.78rem;margin-left:6px;border:none;background:transparent;padding:0}
     .inv-store-more:focus{outline:2px solid rgba(255,255,255,0.06);border-radius:4px}
     .inv-store-hidden{display:none}
@@ -247,17 +247,10 @@
                     </div>
                 </div>
                 <hr class="inv-section-sep">
-                <div class="inv-form-row">
-                    <div class="inv-form-group">
-                        <label for="invQtyOnHand">Quantity on Hand <span class="req">*</span></label>
-                        <input type="number" id="invQtyOnHand" class="inv-form-control" min="0" step="1" value="0" required>
-                        <span class="inv-field-error" id="invQtyOnHandErr"><i class="fa-solid fa-circle-exclamation"></i></span>
-                    </div>
-                    <div class="inv-form-group">
-                        <label for="invQtyOnStore">Quantity on Store <span class="req">*</span></label>
-                        <input type="number" id="invQtyOnStore" class="inv-form-control" min="0" step="1" value="0" required>
-                        <span class="inv-field-error" id="invQtyOnStoreErr"><i class="fa-solid fa-circle-exclamation"></i></span>
-                    </div>
+                <div class="inv-form-group" style="margin-bottom:1.1rem;">
+                    <label for="invQtyOnHand">Quantity on Hand <span class="req">*</span></label>
+                    <input type="number" id="invQtyOnHand" class="inv-form-control" min="0" step="1" value="0" required>
+                    <span class="inv-field-error" id="invQtyOnHandErr"><i class="fa-solid fa-circle-exclamation"></i></span>
                 </div>
                 <div class="inv-section-label">Designate Store <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(optional)</span></div>
                 <div class="inv-form-group" style="margin-bottom:1rem;">

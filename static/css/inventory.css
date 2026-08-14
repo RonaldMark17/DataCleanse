@@ -229,10 +229,10 @@
     background: var(--table-header-bg, #1e293b);
     color: var(--table-header-text, #f8fafc);
     font-weight: 700;
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
-    padding: 13px 18px;
+    letter-spacing: 0.06em;
+    padding: 11px 12px;
     border-bottom: 2px solid var(--border-color);
     white-space: nowrap;
     position: sticky;
@@ -241,11 +241,17 @@
 }
 
 .inv-table td {
-    padding: 14px 18px;
+    padding: 11px 12px;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
     white-space: nowrap;
     transition: background 0.15s;
+}
+
+.inv-table td:first-child {
+    white-space: normal;
+    max-width: 260px;
+    word-break: break-word;
 }
 
 .inv-table tbody tr:last-child td { border-bottom: none; }
@@ -253,7 +259,7 @@
 .inv-table tbody tr:hover td { background: rgba(16, 185, 129, 0.07) !important; }
 
 /* Cell styles */
-.inv-item-name { font-weight: 600; }
+.inv-item-name { font-weight: 600; white-space: normal; line-height: 1.35; }
 .inv-item-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 
 .inv-sku {
@@ -763,20 +769,35 @@
     transform: translateY(-1px);
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-    .inv-page { padding: 1.2rem 1rem; }
-    .inv-toolbar { flex-direction: column; align-items: stretch; }
-    .inv-toolbar-left, .inv-toolbar-right { width: 100%; }
-    .inv-toolbar-right { flex-wrap: wrap; }
-    .inv-store-select { min-width: unset; width: 100%; }
-    .inv-search-wrap { max-width: none; }
-    .inv-table th, .inv-table td { padding: 10px 12px; }
-    .inv-stats-row { grid-template-columns: 1fr 1fr; }
+/* ── Responsive Optimization for Mobile, Tablet, Laptop & Desktop ─────────── */
+@media (max-width: 1024px) {
+    .inv-page { padding: 1.4rem 1.2rem; }
+    .inv-stats-row { grid-template-columns: repeat(2, 1fr); gap: 12px; }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+    .inv-page { padding: 1rem 0.8rem; }
+    .inv-header-title h2 { font-size: 1.2rem; }
+    .inv-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+    .inv-toolbar-left, .inv-toolbar-right { width: 100%; flex-wrap: wrap; gap: 8px; }
+    .inv-search-wrap { max-width: 100%; width: 100%; }
+    .inv-store-select { min-width: 100%; width: 100%; }
+    .btn-inv-add, .btn-inv-manage-stores { flex: 1 1 auto; justify-content: center; text-align: center; }
+    .inv-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .inv-table th, .inv-table td { padding: 10px 10px; font-size: 0.82rem; }
+    .inv-modal { max-width: 95%; max-height: 92vh; border-radius: 12px; }
+    .inv-modal-header { padding: 1rem 1.2rem; }
+    .inv-modal-body { padding: 1rem 1.2rem; }
+    .inv-modal-footer { padding: 0.8rem 1.2rem; flex-wrap: wrap; }
+    .btn-inv-cancel, .btn-inv-save { flex: 1; justify-content: center; }
+}
+
+@media (max-width: 520px) {
     .inv-stats-row { grid-template-columns: 1fr; }
+    .inv-store-row { flex-wrap: wrap; gap: 6px; }
+    .inv-store-row .inv-store-select { width: 100%; min-width: 100%; }
+    .inv-store-row .inv-store-qty { width: calc(100% - 46px); }
+    .inv-assign-summary { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 
 /* ── Low Stock Alert Badges ─────────────────────────────────────────────── */
