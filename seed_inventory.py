@@ -63,10 +63,9 @@ for item_name in ITEMS:
         print(f"  [skip] Item already exists: {item_name}")
         skipped += 1
     else:
-        sku = f"AUTO-{uuid.uuid4().hex[:10].upper()}"
         cur = conn.execute(
-            "INSERT INTO items (name, sku, description, qty_on_hand) VALUES (?, ?, ?, ?)",
-            (item_name, sku, "", 0)
+            "INSERT INTO items (name, description, qty_on_hand) VALUES (?, ?, ?)",
+            (item_name, "", 0)
         )
         item_id = cur.lastrowid
         print(f"  [add]  Created item: {item_name}")

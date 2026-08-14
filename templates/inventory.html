@@ -100,9 +100,28 @@
     <!-- Toolbar -->
     <div class="inv-toolbar">
         <div class="inv-toolbar-left">
-            <select id="invStoreSelect" class="inv-store-select" onchange="onStoreChange()" aria-label="Filter by store">
-                <option value="">— All Items —</option>
-            </select>
+            <div class="inv-multiselect-wrap" id="invStoreMultiselect">
+                <button type="button" class="inv-multiselect-btn" id="invStoreDropdownBtn" onclick="toggleStoreDropdown(event)" aria-haspopup="true" aria-expanded="false" title="Filter inventory by store">
+                    <span class="inv-ms-icon"><i class="fa-solid fa-store"></i></span>
+                    <span class="inv-ms-label" id="invStoreSelectLabel">All Stores</span>
+                    <span class="inv-ms-badge" id="invStoreSelectCount" style="display:none;">0</span>
+                    <i class="fa-solid fa-chevron-down inv-ms-arrow" id="invStoreArrowIcon"></i>
+                </button>
+                <div class="inv-multiselect-menu" id="invStoreDropdownMenu">
+                    <div class="inv-ms-header">
+                        <label class="inv-ms-item inv-ms-all-item">
+                            <input type="checkbox" id="invStoreSelectAll" onchange="toggleAllStores(this.checked)">
+                            <span class="inv-ms-custom-box"><i class="fa-solid fa-check"></i></span>
+                            <span class="inv-ms-name"><strong>All Stores</strong></span>
+                        </label>
+                        <span class="inv-ms-hint" id="invStoreTotalHint">0 stores</span>
+                    </div>
+                    <div class="inv-ms-divider"></div>
+                    <div class="inv-ms-list" id="invStoreCheckboxList">
+                        <!-- Populated dynamically with store checkboxes -->
+                    </div>
+                </div>
+            </div>
             <button class="btn-inv-add btn-inv-manage-stores" onclick="openStoreManageModal()" id="btnManageStores">
                 <i class="fa-solid fa-gear"></i> Manage Stores
             </button>

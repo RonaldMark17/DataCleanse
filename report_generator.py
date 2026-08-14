@@ -741,7 +741,7 @@ class InventoryReportGenerator:
         )
 
         # 1. Title Banner
-        ws.merge_cells("A1:G1")
+        ws.merge_cells("A1:F1")
         c1 = ws["A1"]
         c1.value = "  Inventory Stock Report"
         c1.font = font_title
@@ -764,7 +764,7 @@ class InventoryReportGenerator:
             ("A", "B", "TOTAL CATALOG ITEMS", len(items)),
             ("C", "C", "TOTAL ON HAND (MAIN)", sum_on_hand),
             ("D", "D", "TOTAL ON STORE (ALLOCATED)", sum_on_store),
-            ("E", "G", "TOTAL PCS (OVERALL STOCK)", sum_total_pcs),
+            ("E", "F", "TOTAL PCS (OVERALL STOCK)", sum_total_pcs),
         ]
         for col_start, col_end, label, val in kpis:
             cell_range_lbl = f"{col_start}4:{col_end}4"
@@ -790,13 +790,12 @@ class InventoryReportGenerator:
 
         # 4. Table Headers (Row 7)
         headers = [
-            ("A", "SKU"),
-            ("B", "Item Name"),
-            ("C", "On Hand (Main)"),
-            ("D", "On Store (Allocated)"),
-            ("E", "Total Pcs"),
-            ("F", "Store Breakdown / Allocations"),
-            ("G", "Stock Alert"),
+            ("A", "Item Name"),
+            ("B", "On Hand (Main)"),
+            ("C", "On Store (Allocated)"),
+            ("D", "Total Pcs"),
+            ("E", "Store Breakdown / Allocations"),
+            ("F", "Stock Alert"),
         ]
         for col, h in headers:
             cell = ws[f"{col}7"]
@@ -812,7 +811,6 @@ class InventoryReportGenerator:
         LOW_STOCK_THRESHOLD = 10
 
         for it in items:
-            sku = str(it.get('sku') or '—')
             name = str(it.get('name') or '—')
             on_hand = int(it.get('qty_on_hand') or 0)
             on_store = int(it.get('qty_on_store') or 0)
@@ -827,35 +825,31 @@ class InventoryReportGenerator:
             is_low = total_pcs <= LOW_STOCK_THRESHOLD
             alert_text = "Low Stock" if is_low else "In Stock"
 
-            ws[f"A{row_idx}"] = sku
-            ws[f"A{row_idx}"].font = font_data
-            ws[f"A{row_idx}"].alignment = align_center
+            ws[f"A{row_idx}"] = name
+            ws[f"A{row_idx}"].font = font_data_bold
+            ws[f"A{row_idx}"].alignment = align_left
 
-            ws[f"B{row_idx}"] = name
-            ws[f"B{row_idx}"].font = font_data_bold
-            ws[f"B{row_idx}"].alignment = align_left
+            ws[f"B{row_idx}"] = on_hand
+            ws[f"B{row_idx}"].font = font_hand
+            ws[f"B{row_idx}"].alignment = align_right
 
-            ws[f"C{row_idx}"] = on_hand
-            ws[f"C{row_idx}"].font = font_hand
+            ws[f"C{row_idx}"] = on_store
+            ws[f"C{row_idx}"].font = font_store
             ws[f"C{row_idx}"].alignment = align_right
 
-            ws[f"D{row_idx}"] = on_store
-            ws[f"D{row_idx}"].font = font_store
+            ws[f"D{row_idx}"] = total_pcs
+            ws[f"D{row_idx}"].font = font_total
             ws[f"D{row_idx}"].alignment = align_right
 
-            ws[f"E{row_idx}"] = total_pcs
-            ws[f"E{row_idx}"].font = font_total
-            ws[f"E{row_idx}"].alignment = align_right
+            ws[f"E{row_idx}"] = bd_text
+            ws[f"E{row_idx}"].font = font_data
+            ws[f"E{row_idx}"].alignment = align_wrap
 
-            ws[f"F{row_idx}"] = bd_text
-            ws[f"F{row_idx}"].font = font_data
-            ws[f"F{row_idx}"].alignment = align_wrap
+            ws[f"F{row_idx}"] = alert_text
+            ws[f"F{row_idx}"].font = font_low_stock if is_low else font_in_stock
+            ws[f"F{row_idx}"].alignment = align_center
 
-            ws[f"G{row_idx}"] = alert_text
-            ws[f"G{row_idx}"].font = font_low_stock if is_low else font_in_stock
-            ws[f"G{row_idx}"].alignment = align_center
-
-            for col_letter in ["A","B","C","D","E","F","G"]:
+            for col_letter in ["A","B","C","D","E","F"]:
                 c = ws[f"{col_letter}{row_idx}"]
                 c.border = thin_border
                 if row_idx % 2 == 0:
@@ -866,30 +860,26 @@ class InventoryReportGenerator:
 
         # 6. Totals Row
         tot_row = row_idx
-        ws[f"A{tot_row}"] = "TOTALS"
+        ws[f"A{tot_row}"] = f"TOTALS ({len(items)} Items)"
         ws[f"A{tot_row}"].font = font_data_bold
-        ws[f"A{tot_row}"].alignment = align_center
+        ws[f"A{tot_row}"].alignment = align_left
 
-        ws[f"B{tot_row}"] = f"{len(items)} Items"
-        ws[f"B{tot_row}"].font = font_data_bold
-        ws[f"B{tot_row}"].alignment = align_left
+        ws[f"B{tot_row}"] = sum_on_hand
+        ws[f"B{tot_row}"].font = font_hand
+        ws[f"B{tot_row}"].alignment = align_right
 
-        ws[f"C{tot_row}"] = sum_on_hand
-        ws[f"C{tot_row}"].font = font_hand
+        ws[f"C{tot_row}"] = sum_on_store
+        ws[f"C{tot_row}"].font = font_store
         ws[f"C{tot_row}"].alignment = align_right
 
-        ws[f"D{tot_row}"] = sum_on_store
-        ws[f"D{tot_row}"].font = font_store
+        ws[f"D{tot_row}"] = sum_total_pcs
+        ws[f"D{tot_row}"].font = font_total
         ws[f"D{tot_row}"].alignment = align_right
 
-        ws[f"E{tot_row}"] = sum_total_pcs
-        ws[f"E{tot_row}"].font = font_total
-        ws[f"E{tot_row}"].alignment = align_right
-
+        ws[f"E{tot_row}"] = ""
         ws[f"F{tot_row}"] = ""
-        ws[f"G{tot_row}"] = ""
 
-        for col_letter in ["A","B","C","D","E","F","G"]:
+        for col_letter in ["A","B","C","D","E","F"]:
             c = ws[f"{col_letter}{tot_row}"]
             c.border = double_bottom_border
             c.fill = fill_totals
@@ -898,13 +888,12 @@ class InventoryReportGenerator:
 
         # 7. Column Auto-fit
         col_widths = {
-            "A": 16,
-            "B": 36,
-            "C": 18,
-            "D": 22,
-            "E": 16,
-            "F": 42,
-            "G": 16,
+            "A": 38,
+            "B": 18,
+            "C": 22,
+            "D": 16,
+            "E": 42,
+            "F": 16,
         }
         for col_letter, width in col_widths.items():
             ws.column_dimensions[col_letter].width = width

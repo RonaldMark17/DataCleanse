@@ -9,6 +9,7 @@ let INV = {
     inventory: [],
     filteredInventory: [],
     selectedStoreId: null,
+    selectedStoreIds: [], // List of checked store IDs (empty = all stores)
     editingInvId: null,   // store_inventory.id being edited
     editingItemId: null,  // items.id being edited
     editingStoreId: null,
@@ -129,17 +130,121 @@ async function loadStores() {
 }
 
 function populateStoreDropdown() {
-    const sel = document.getElementById('invStoreSelect');
-    if (!sel) return;
-    const prev = INV.selectedStoreId;
-    sel.innerHTML = '<option value="">— All Items —</option>';
-    INV.stores.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name + (s.status === 'inactive' ? ' (Inactive)' : '');
-        sel.appendChild(opt);
-    });
-    if (prev) sel.value = prev;
+    const list = document.getElementById('invStoreCheckboxList');
+    const totalHint = document.getElementById('invStoreTotalHint');
+    if (!list) return;
+
+    const activeStores = INV.stores.filter(s => s.status === 'active');
+    if (totalHint) totalHint.textContent = `${activeStores.length} active store${activeStores.length !== 1 ? 's' : ''}`;
+
+    if (INV.stores.length === 0) {
+        list.innerHTML = `<div style="padding:12px;text-align:center;color:var(--text-muted);font-size:0.82rem;">No stores found.</div>`;
+        updateStoreDropdownUI();
+        return;
+    }
+
+    list.innerHTML = INV.stores.map(s => {
+        const isChecked = INV.selectedStoreIds.includes(s.id);
+        const isInactive = s.status === 'inactive';
+        return `
+            <label class="inv-ms-item" title="${escHtml(s.name)}">
+                <input type="checkbox" value="${s.id}" ${isChecked ? 'checked' : ''} onchange="onStoreCheckboxChange(${s.id}, this.checked)">
+                <span class="inv-ms-custom-box"><i class="fa-solid fa-check"></i></span>
+                <span class="inv-ms-name">${escHtml(s.name)}</span>
+                ${isInactive ? `<span class="inv-ms-status-tag">Inactive</span>` : ''}
+            </label>
+        `;
+    }).join('');
+
+    updateStoreDropdownUI();
+}
+
+function updateStoreDropdownUI() {
+    const allChk = document.getElementById('invStoreSelectAll');
+    const labelEl = document.getElementById('invStoreSelectLabel');
+    const countBadge = document.getElementById('invStoreSelectCount');
+    const activeStores = INV.stores.filter(s => s.status === 'active');
+    const activeCount = activeStores.length;
+    const selectedCount = INV.selectedStoreIds.length;
+
+    if (allChk) {
+        if (selectedCount === 0 || (activeCount > 0 && selectedCount === activeCount)) {
+            allChk.checked = true;
+            allChk.indeterminate = false;
+        } else if (selectedCount > 0 && selectedCount < activeCount) {
+            allChk.checked = false;
+            allChk.indeterminate = true;
+        } else {
+            allChk.checked = false;
+            allChk.indeterminate = false;
+        }
+    }
+
+    if (labelEl) {
+        if (selectedCount === 0 || (activeCount > 0 && selectedCount === activeCount)) {
+            labelEl.textContent = 'All Stores';
+            if (countBadge) countBadge.style.display = 'none';
+        } else if (selectedCount === 1) {
+            const singleStore = INV.stores.find(s => s.id === INV.selectedStoreIds[0]);
+            labelEl.textContent = singleStore ? singleStore.name : '1 Store Selected';
+            if (countBadge) {
+                countBadge.style.display = 'inline-block';
+                countBadge.textContent = '1';
+            }
+        } else {
+            labelEl.textContent = `${selectedCount} Stores Selected`;
+            if (countBadge) {
+                countBadge.style.display = 'inline-block';
+                countBadge.textContent = String(selectedCount);
+            }
+        }
+    }
+}
+
+function toggleStoreDropdown(e) {
+    if (e) e.stopPropagation();
+    const wrap = document.getElementById('invStoreMultiselect');
+    const btn = document.getElementById('invStoreDropdownBtn');
+    if (!wrap) return;
+    const isOpen = wrap.classList.toggle('open');
+    if (btn) btn.setAttribute('aria-expanded', String(isOpen));
+}
+
+function closeStoreDropdown() {
+    const wrap = document.getElementById('invStoreMultiselect');
+    const btn = document.getElementById('invStoreDropdownBtn');
+    if (wrap && wrap.classList.contains('open')) {
+        wrap.classList.remove('open');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function toggleAllStores(checked) {
+    if (checked) {
+        INV.selectedStoreIds = [];
+    } else {
+        INV.selectedStoreIds = [];
+    }
+    const list = document.getElementById('invStoreCheckboxList');
+    if (list) {
+        list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = checked;
+        });
+    }
+    updateStoreDropdownUI();
+    reloadInventoryByStoreSelection();
+}
+
+function onStoreCheckboxChange(storeId, isChecked) {
+    if (isChecked) {
+        if (!INV.selectedStoreIds.includes(storeId)) {
+            INV.selectedStoreIds.push(storeId);
+        }
+    } else {
+        INV.selectedStoreIds = INV.selectedStoreIds.filter(id => id !== storeId);
+    }
+    updateStoreDropdownUI();
+    reloadInventoryByStoreSelection();
 }
 
 // Populate the store assign dropdown inside the item modal (kept for backward compat)
@@ -386,16 +491,24 @@ function refreshStoreOptionsToPreventDuplicates() {
     }
 }
 
-function onStoreChange() {
-    const sel = document.getElementById('invStoreSelect');
-    INV.selectedStoreId = sel.value ? parseInt(sel.value) : null;
-    if (INV.selectedStoreId) {
-        loadInventory(INV.selectedStoreId);
-        const store = INV.stores.find(s => s.id === INV.selectedStoreId);
-        updateTableHeader(store ? store.name : 'Store');
-    } else {
-        loadAllItems();
+async function reloadInventoryByStoreSelection() {
+    const selectedCount = INV.selectedStoreIds.length;
+    const activeStores = INV.stores.filter(s => s.status === 'active');
+    const allSelected = selectedCount === 0 || (activeStores.length > 0 && selectedCount === activeStores.length);
+
+    if (allSelected) {
+        INV.selectedStoreId = null;
         updateTableHeader('All Items');
+        await loadAllItems();
+    } else {
+        INV.selectedStoreId = selectedCount === 1 ? INV.selectedStoreIds[0] : null;
+        if (selectedCount === 1) {
+            const st = INV.stores.find(s => s.id === INV.selectedStoreIds[0]);
+            updateTableHeader(st ? st.name : 'Store');
+        } else {
+            updateTableHeader(`${selectedCount} Stores Selected`);
+        }
+        await loadFilteredStoreInventory();
     }
 }
 
@@ -597,6 +710,46 @@ async function loadAllItems() {
     }
 }
 
+async function loadFilteredStoreInventory() {
+    updateTableHeader('Loading...');
+    try {
+        const res = await fetch('/api/inventory/all-items');
+        const data = await res.json();
+
+        // Filter items to those assigned to any of the checked stores
+        const selSet = new Set(INV.selectedStoreIds.map(Number));
+        const filtered = [];
+
+        for (const it of data) {
+            const matchedAssignments = (it.store_breakdown || []).filter(sb => selSet.has(Number(sb.store_id)));
+            if (matchedAssignments.length > 0) {
+                const storeQty = matchedAssignments.reduce((sum, sb) => sum + Number(sb.qty || sb.qty_on_store || 0), 0);
+                const onHand = Number(it.qty_on_hand || 0);
+                filtered.push({
+                    ...it,
+                    qty_on_store: storeQty,
+                    total_pcs: onHand + storeQty,
+                    store_breakdown: matchedAssignments
+                });
+            }
+        }
+
+        INV.inventory = filtered;
+        applyFilter();
+        updateStats();
+
+        const selectedCount = INV.selectedStoreIds.length;
+        if (selectedCount === 1) {
+            const st = INV.stores.find(s => s.id === INV.selectedStoreIds[0]);
+            updateTableHeader(st ? st.name : 'Store');
+        } else {
+            updateTableHeader(`${selectedCount} Stores Selected`);
+        }
+    } catch (e) {
+        invToast('Failed to load inventory for selected stores.', 'error');
+    }
+}
+
 async function loadInventory(storeId) {
     updateTableHeader('Loading...');
     try {
@@ -605,12 +758,10 @@ async function loadInventory(storeId) {
         INV.inventory = data;
         applyFilter();
         updateStats();
-        // Restore header to the actual store name after loading completes
         const store = INV.stores.find(s => s.id === storeId);
         updateTableHeader(store ? store.name : 'Store');
     } catch (e) {
         invToast('Failed to load inventory.', 'error');
-        // Restore header on error too
         const store = INV.stores.find(s => s.id === storeId);
         updateTableHeader(store ? store.name : 'Store');
     }
@@ -618,9 +769,11 @@ async function loadInventory(storeId) {
 
 // ── Inventory Export ───────────────────────────────────────────────────────
 function exportInventory(fmt) {
-    const storeId = INV.selectedStoreId || '';
+    const storeIdsParam = INV.selectedStoreIds && INV.selectedStoreIds.length > 0
+        ? INV.selectedStoreIds.join(',')
+        : (INV.selectedStoreId ? String(INV.selectedStoreId) : '');
     const search = encodeURIComponent(INV.searchQuery || '');
-    const url = `/api/inventory/export/${fmt}?store_id=${storeId}&search=${search}`;
+    const url = `/api/inventory/export/${fmt}?store_ids=${storeIdsParam}&search=${search}`;
 
     if (fmt === 'pdf') {
         window.open(url, '_blank');
@@ -1047,11 +1200,10 @@ async function saveNewItem() {
             }
 
             // Step 1: Update item catalog details (name, description, qty_on_hand)
-            const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
             const itemRes = await fetch(`/api/inventory/items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand, sku })
+                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand })
             });
             if (!itemRes.ok) {
                 const itemData = await itemRes.json().catch(() => ({}));
@@ -1078,11 +1230,10 @@ async function saveNewItem() {
             }
         } else {
             // CREATE PATH
-            const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
             const itemRes = await fetch('/api/inventory/items', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, sku, description: desc, qty_on_hand: qtyOnHand })
+                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand })
             });
             const itemData = await itemRes.json();
             if (!itemRes.ok) {
@@ -1208,9 +1359,6 @@ async function saveCatalogItem() {
     const name     = document.getElementById('catItemName').value.trim();
     const description = document.getElementById('catItemDesc').value.trim();
 
-    // Auto-generate SKU
-    const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-
     let valid = true;
     if (!name) { invShowError('catItemName', 'catItemNameErr', 'Item name is required.'); valid = false; }
     if (!valid) return;
@@ -1225,7 +1373,7 @@ async function saveCatalogItem() {
         const res = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, sku, description })
+            body: JSON.stringify({ name, description })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -1320,11 +1468,16 @@ document.addEventListener('click', (e) => {
             document.body.style.overflow = '';
         }
     }
+    const msWrap = document.getElementById('invStoreMultiselect');
+    if (msWrap && !msWrap.contains(e.target)) {
+        closeStoreDropdown();
+    }
 });
 
-// Escape key to close modals
+// Escape key to close modals and dropdowns
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+        closeStoreDropdown();
         document.querySelectorAll('.inv-modal-overlay.active').forEach(m => m.classList.remove('active'));
         document.body.style.overflow = '';
     }
