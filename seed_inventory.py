@@ -65,8 +65,8 @@ for item_name in ITEMS:
     else:
         sku = f"AUTO-{uuid.uuid4().hex[:10].upper()}"
         cur = conn.execute(
-            "INSERT INTO items (name, sku, category, unit, description) VALUES (?, ?, ?, ?, ?)",
-            (item_name, sku, "Menu", "pcs", "")
+            "INSERT INTO items (name, sku, description, qty_on_hand) VALUES (?, ?, ?, ?)",
+            (item_name, sku, "", 0)
         )
         item_id = cur.lastrowid
         print(f"  [add]  Created item: {item_name}")
@@ -80,8 +80,8 @@ for item_name in ITEMS:
 
     if not inv_row:
         conn.execute(
-            "INSERT INTO store_inventory (store_id, item_id, qty_on_hand, qty_on_store, last_updated) VALUES (?,?,?,?,?)",
-            (store_id, item_id, 0, 0, now)
+            "INSERT INTO store_inventory (store_id, item_id, qty_on_store, last_updated) VALUES (?,?,?,?)",
+            (store_id, item_id, 0, now)
         )
 
 conn.commit()

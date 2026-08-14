@@ -408,3 +408,508 @@ class ExecutivePDFReportGenerator:
 
         doc.build(story)
         return buffer.getvalue()
+
+
+class InventoryReportGenerator:
+    """Generates professional executive PDF and Excel reports for the Inventory Management System."""
+
+    @staticmethod
+    def generate_inventory_pdf(items: list, store_name: str = "All Items", active_stores_count: int = 0) -> bytes:
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            leftMargin=30,
+            rightMargin=30,
+            topMargin=30,
+            bottomMargin=30
+        )
+
+        styles = getSampleStyleSheet()
+
+        PRIMARY = colors.HexColor('#0f172a')       # Slate 900
+        ACCENT_TEAL = colors.HexColor('#0d9488')   # Teal 600
+        INDIGO = colors.HexColor('#4f46e5')        # Indigo 600
+        AMBER = colors.HexColor('#d97706')         # Amber 600
+        EMERALD = colors.HexColor('#059669')       # Emerald 600
+        ROSE = colors.HexColor('#e11d48')          # Rose 600
+        TEXT_COLOR = colors.HexColor('#0f172a')
+        MUTED_TEXT = colors.HexColor('#64748b')
+        LIGHT_BG = colors.HexColor('#f8fafc')
+        BORDER_COLOR = colors.HexColor('#e2e8f0')
+
+        title_style = ParagraphStyle(
+            'InvReportTitle',
+            parent=styles['Title'],
+            fontName='Helvetica-Bold',
+            fontSize=16,
+            leading=20,
+            textColor=PRIMARY,
+            alignment=0,
+            spaceAfter=2
+        )
+
+        subtitle_style = ParagraphStyle(
+            'InvReportSubTitle',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=8.5,
+            leading=12,
+            textColor=MUTED_TEXT,
+            alignment=0,
+            spaceAfter=8
+        )
+
+        section_heading = ParagraphStyle(
+            'InvSectionHeading',
+            parent=styles['Heading2'],
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            leading=14,
+            textColor=INDIGO,
+            spaceBefore=8,
+            spaceAfter=5
+        )
+
+        table_header = ParagraphStyle(
+            'InvTableHeader',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=7.5,
+            leading=9.5,
+            textColor=colors.white,
+            alignment=1
+        )
+
+        table_text = ParagraphStyle(
+            'InvTableText',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=7.5,
+            leading=9.5,
+            textColor=TEXT_COLOR
+        )
+
+        table_text_bold = ParagraphStyle(
+            'InvTableTextBold',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=7.5,
+            leading=9.5,
+            textColor=TEXT_COLOR
+        )
+
+        table_text_center = ParagraphStyle(
+            'InvTableTextCenter',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=7.5,
+            leading=9.5,
+            textColor=TEXT_COLOR,
+            alignment=1
+        )
+
+        table_text_hand = ParagraphStyle(
+            'InvTableTextHand',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=EMERALD,
+            alignment=1
+        )
+
+        table_text_store = ParagraphStyle(
+            'InvTableTextStore',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=AMBER,
+            alignment=1
+        )
+
+        table_text_total = ParagraphStyle(
+            'InvTableTextTotal',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=INDIGO,
+            alignment=1
+        )
+
+        badge_instock = ParagraphStyle(
+            'InvBadgeInStock',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=7,
+            leading=9,
+            textColor=EMERALD,
+            alignment=1
+        )
+
+        badge_lowstock = ParagraphStyle(
+            'InvBadgeLowStock',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=7,
+            leading=9,
+            textColor=ROSE,
+            alignment=1
+        )
+
+        kpi_title_style = ParagraphStyle(
+            'InvKpiTitle',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=7,
+            leading=8.5,
+            textColor=MUTED_TEXT,
+            alignment=1
+        )
+
+        kpi_val_style = ParagraphStyle(
+            'InvKpiVal',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=13,
+            leading=16,
+            textColor=PRIMARY,
+            alignment=1
+        )
+
+        story = []
+
+        # 1. Header Banner
+        story.append(Paragraph("DataCleanse &bull; Inventory Stock Report", title_style))
+        gen_time = datetime.datetime.now().strftime("%B %d, %Y at %I:%M %p")
+        story.append(Paragraph(f"Scope: <b>{store_name}</b> &nbsp;|&nbsp; Generated on: {gen_time}", subtitle_style))
+        story.append(HRFlowable(width="100%", thickness=1.5, color=ACCENT_TEAL, spaceBefore=2, spaceAfter=8))
+
+        # 2. KPI Summary Cards
+        total_items_count = len(items)
+        sum_on_hand = sum(int(it.get('qty_on_hand') or 0) for it in items)
+        sum_on_store = sum(int(it.get('qty_on_store') or 0) for it in items)
+        sum_total_pcs = sum_on_hand + sum_on_store
+
+        kpi_data = [
+            [
+                Paragraph("ACTIVE STORES", kpi_title_style),
+                Paragraph("CATALOG ITEMS", kpi_title_style),
+                Paragraph("TOTAL ON HAND (MAIN)", kpi_title_style),
+                Paragraph("TOTAL ON STORE (ALLOCATED)", kpi_title_style),
+                Paragraph("TOTAL PCS (STOCK)", kpi_title_style),
+            ],
+            [
+                Paragraph(str(active_stores_count if active_stores_count > 0 else (1 if store_name != "All Items" else 0)), kpi_val_style),
+                Paragraph(str(total_items_count), kpi_val_style),
+                Paragraph(str(sum_on_hand), kpi_val_style),
+                Paragraph(str(sum_on_store), kpi_val_style),
+                Paragraph(str(sum_total_pcs), kpi_val_style),
+            ]
+        ]
+        kpi_table = Table(kpi_data, colWidths=[110, 110, 110, 110, 112])
+        kpi_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), LIGHT_BG),
+            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
+            ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ]))
+        story.append(kpi_table)
+        story.append(Spacer(1, 10))
+
+        # 3. Inventory Table
+        story.append(Paragraph(f"Inventory Stock Breakdown ({store_name})", section_heading))
+
+        headers = [
+            Paragraph("Item Name", table_header),
+            Paragraph("On Hand<br/><font size='6' color='#cbd5e1'>Main Inventory</font>", table_header),
+            Paragraph("On Store<br/><font size='6' color='#cbd5e1'>Allocated</font>", table_header),
+            Paragraph("Total Pcs<br/><font size='6' color='#cbd5e1'>Hand + Store</font>", table_header),
+            Paragraph("Stock Alert", table_header),
+            Paragraph("Last Updated", table_header),
+        ]
+        table_rows = [headers]
+
+        LOW_STOCK_THRESHOLD = 10
+
+        for it in items:
+            name = str(it.get('name') or '—')
+            on_hand = int(it.get('qty_on_hand') or 0)
+            on_store = int(it.get('qty_on_store') or 0)
+            total_pcs = int(it.get('total_pcs') or (on_hand + on_store))
+            last_up = str(it.get('last_updated') or '—')[:16]
+
+            # Store breakdown text if available
+            store_bd = it.get('store_breakdown')
+            if isinstance(store_bd, list) and store_bd:
+                bd_text = ", ".join([f"{sb.get('name', 'Store')}: {sb.get('qty', 0)}" for sb in store_bd])
+                store_display = Paragraph(f"<b>{on_store}</b><br/><font size='6' color='#64748b'>{bd_text}</font>", table_text_center)
+            else:
+                store_display = Paragraph(str(on_store), table_text_store)
+
+            is_low = total_pcs <= LOW_STOCK_THRESHOLD
+            alert_cell = Paragraph("&#9888; Low Stock" if is_low else "&#10003; In Stock", badge_lowstock if is_low else badge_instock)
+
+            table_rows.append([
+                Paragraph(name, table_text_bold),
+                Paragraph(str(on_hand), table_text_hand),
+                store_display,
+                Paragraph(str(total_pcs), table_text_total),
+                alert_cell,
+                Paragraph(last_up, table_text_center),
+            ])
+
+        # Summary Totals Row
+        table_rows.append([
+            Paragraph("<b>TOTALS</b>", table_text_bold),
+            Paragraph(f"<b>{sum_on_hand}</b>", table_text_hand),
+            Paragraph(f"<b>{sum_on_store}</b>", table_text_store),
+            Paragraph(f"<b>{sum_total_pcs}</b>", table_text_total),
+            Paragraph("", table_text),
+            Paragraph("", table_text),
+        ])
+
+        inv_table = Table(table_rows, colWidths=[200, 70, 100, 65, 60, 57])
+        inv_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), PRIMARY),
+            ('GRID', (0,0), (-1,-2), 0.5, BORDER_COLOR),
+            ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, LIGHT_BG]),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e2e8f0')),
+            ('LINEABOVE', (0,-1), (-1,-1), 1.5, PRIMARY),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 3.5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3.5),
+            ('LEFTPADDING', (0,0), (-1,-1), 4),
+            ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ]))
+        story.append(inv_table)
+
+        doc.build(story)
+        return buffer.getvalue()
+
+    @staticmethod
+    def generate_inventory_excel(items: list, store_name: str = "All Items") -> bytes:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Inventory Report"
+        ws.views.sheetView[0].showGridLines = True
+
+        # Styles
+        font_title = Font(name="Segoe UI", size=14, bold=True, color="FFFFFF")
+        font_subtitle = Font(name="Segoe UI", size=9, italic=True, color="64748B")
+        font_kpi_label = Font(name="Segoe UI", size=8, bold=True, color="475569")
+        font_kpi_val = Font(name="Segoe UI", size=12, bold=True, color="0F172A")
+        font_header = Font(name="Segoe UI", size=9.5, bold=True, color="FFFFFF")
+        font_data = Font(name="Segoe UI", size=9, color="0F172A")
+        font_data_bold = Font(name="Segoe UI", size=9, bold=True, color="0F172A")
+        font_hand = Font(name="Segoe UI", size=9, bold=True, color="047857")
+        font_store = Font(name="Segoe UI", size=9, bold=True, color="B45309")
+        font_total = Font(name="Segoe UI", size=9, bold=True, color="4338CA")
+        font_in_stock = Font(name="Segoe UI", size=8.5, bold=True, color="059669")
+        font_low_stock = Font(name="Segoe UI", size=8.5, bold=True, color="DC2626")
+
+        fill_banner = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+        fill_header = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        fill_kpi = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        fill_totals = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+
+        align_center = Alignment(horizontal="center", vertical="center")
+        align_left = Alignment(horizontal="left", vertical="center")
+        align_right = Alignment(horizontal="right", vertical="center")
+        align_wrap = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        double_bottom_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='0F172A'),
+            bottom=Side(style='double', color='0F172A')
+        )
+
+        # 1. Title Banner
+        ws.merge_cells("A1:G1")
+        c1 = ws["A1"]
+        c1.value = "  DataCleanse — Inventory Management & Stock Report"
+        c1.font = font_title
+        c1.fill = fill_banner
+        c1.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[1].height = 32
+
+        # 2. Subtitle info
+        gen_time = datetime.datetime.now().strftime("%B %d, %Y at %I:%M %p")
+        ws["A2"] = f"Scope: {store_name}  |  Exported on: {gen_time}  |  Definition: Total Pcs = Item on Hand (Main) + Item on Store (Allocated)"
+        ws["A2"].font = font_subtitle
+        ws.row_dimensions[2].height = 18
+
+        # 3. KPI Summary Blocks (Row 4 & 5)
+        sum_on_hand = sum(int(it.get('qty_on_hand') or 0) for it in items)
+        sum_on_store = sum(int(it.get('qty_on_store') or 0) for it in items)
+        sum_total_pcs = sum_on_hand + sum_on_store
+
+        kpis = [
+            ("A", "B", "TOTAL CATALOG ITEMS", len(items)),
+            ("C", "C", "TOTAL ON HAND (MAIN)", sum_on_hand),
+            ("D", "D", "TOTAL ON STORE (ALLOCATED)", sum_on_store),
+            ("E", "G", "TOTAL PCS (OVERALL STOCK)", sum_total_pcs),
+        ]
+        for col_start, col_end, label, val in kpis:
+            cell_range_lbl = f"{col_start}4:{col_end}4"
+            cell_range_val = f"{col_start}5:{col_end}5"
+            if col_start != col_end:
+                ws.merge_cells(cell_range_lbl)
+                ws.merge_cells(cell_range_val)
+            ws[f"{col_start}4"] = label
+            ws[f"{col_start}4"].font = font_kpi_label
+            ws[f"{col_start}4"].fill = fill_kpi
+            ws[f"{col_start}4"].alignment = align_center
+            ws[f"{col_start}5"] = val
+            ws[f"{col_start}5"].font = font_kpi_val
+            ws[f"{col_start}5"].fill = fill_kpi
+            ws[f"{col_start}5"].alignment = align_center
+
+            for row in range(4, 6):
+                for col_idx in range(openpyxl.utils.column_index_from_string(col_start), openpyxl.utils.column_index_from_string(col_end) + 1):
+                    ws.cell(row=row, column=col_idx).border = thin_border
+
+        ws.row_dimensions[4].height = 14
+        ws.row_dimensions[5].height = 20
+
+        # 4. Table Headers (Row 7)
+        headers = [
+            ("A", "SKU"),
+            ("B", "Item Name"),
+            ("C", "On Hand (Main)"),
+            ("D", "On Store (Allocated)"),
+            ("E", "Total Pcs"),
+            ("F", "Store Breakdown / Allocations"),
+            ("G", "Stock Alert"),
+        ]
+        for col, h in headers:
+            cell = ws[f"{col}7"]
+            cell.value = h
+            cell.font = font_header
+            cell.fill = fill_header
+            cell.alignment = align_center
+            cell.border = thin_border
+        ws.row_dimensions[7].height = 24
+
+        # 5. Data Rows
+        row_idx = 8
+        LOW_STOCK_THRESHOLD = 10
+
+        for it in items:
+            sku = str(it.get('sku') or '—')
+            name = str(it.get('name') or '—')
+            on_hand = int(it.get('qty_on_hand') or 0)
+            on_store = int(it.get('qty_on_store') or 0)
+            total_pcs = int(it.get('total_pcs') or (on_hand + on_store))
+
+            store_bd = it.get('store_breakdown')
+            if isinstance(store_bd, list) and store_bd:
+                bd_text = "; ".join([f"{sb.get('name', 'Store')}: {sb.get('qty', 0)}" for sb in store_bd])
+            else:
+                bd_text = "—"
+
+            is_low = total_pcs <= LOW_STOCK_THRESHOLD
+            alert_text = "Low Stock" if is_low else "In Stock"
+
+            ws[f"A{row_idx}"] = sku
+            ws[f"A{row_idx}"].font = font_data
+            ws[f"A{row_idx}"].alignment = align_center
+
+            ws[f"B{row_idx}"] = name
+            ws[f"B{row_idx}"].font = font_data_bold
+            ws[f"B{row_idx}"].alignment = align_left
+
+            ws[f"C{row_idx}"] = on_hand
+            ws[f"C{row_idx}"].font = font_hand
+            ws[f"C{row_idx}"].alignment = align_right
+
+            ws[f"D{row_idx}"] = on_store
+            ws[f"D{row_idx}"].font = font_store
+            ws[f"D{row_idx}"].alignment = align_right
+
+            ws[f"E{row_idx}"] = total_pcs
+            ws[f"E{row_idx}"].font = font_total
+            ws[f"E{row_idx}"].alignment = align_right
+
+            ws[f"F{row_idx}"] = bd_text
+            ws[f"F{row_idx}"].font = font_data
+            ws[f"F{row_idx}"].alignment = align_wrap
+
+            ws[f"G{row_idx}"] = alert_text
+            ws[f"G{row_idx}"].font = font_low_stock if is_low else font_in_stock
+            ws[f"G{row_idx}"].alignment = align_center
+
+            for col_letter in ["A","B","C","D","E","F","G"]:
+                c = ws[f"{col_letter}{row_idx}"]
+                c.border = thin_border
+                if row_idx % 2 == 0:
+                    c.fill = fill_zebra
+
+            ws.row_dimensions[row_idx].height = 20
+            row_idx += 1
+
+        # 6. Totals Row
+        tot_row = row_idx
+        ws[f"A{tot_row}"] = "TOTALS"
+        ws[f"A{tot_row}"].font = font_data_bold
+        ws[f"A{tot_row}"].alignment = align_center
+
+        ws[f"B{tot_row}"] = f"{len(items)} Items"
+        ws[f"B{tot_row}"].font = font_data_bold
+        ws[f"B{tot_row}"].alignment = align_left
+
+        ws[f"C{tot_row}"] = sum_on_hand
+        ws[f"C{tot_row}"].font = font_hand
+        ws[f"C{tot_row}"].alignment = align_right
+
+        ws[f"D{tot_row}"] = sum_on_store
+        ws[f"D{tot_row}"].font = font_store
+        ws[f"D{tot_row}"].alignment = align_right
+
+        ws[f"E{tot_row}"] = sum_total_pcs
+        ws[f"E{tot_row}"].font = font_total
+        ws[f"E{tot_row}"].alignment = align_right
+
+        ws[f"F{tot_row}"] = ""
+        ws[f"G{tot_row}"] = ""
+
+        for col_letter in ["A","B","C","D","E","F","G"]:
+            c = ws[f"{col_letter}{tot_row}"]
+            c.border = double_bottom_border
+            c.fill = fill_totals
+
+        ws.row_dimensions[tot_row].height = 22
+
+        # 7. Column Auto-fit
+        col_widths = {
+            "A": 16,
+            "B": 36,
+            "C": 18,
+            "D": 22,
+            "E": 16,
+            "F": 42,
+            "G": 16,
+        }
+        for col_letter, width in col_widths.items():
+            ws.column_dimensions[col_letter].width = width
+
+        out = io.BytesIO()
+        wb.save(out)
+        return out.getvalue()
+

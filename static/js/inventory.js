@@ -259,11 +259,12 @@ function aggregateInventory(list) {
         if (!m.has(key)) {
             m.set(key, {
                 id: pid || null,
+                item_id: pid || null,
                 name: r.name || r.item_name || r.title || '—',
-                unit: r.unit || 'pcs',
                 description: r.description || r.desc || r.note || '',
                 qty_on_hand: typeof r.qty_on_hand !== 'undefined' ? Number(r.qty_on_hand) : 0,
                 qty_on_store: 0,
+                total_pcs: 0,
                 store_breakdown: [],
                 last_updated: r.last_updated || r.updated_at || r.created_at || null
             });
@@ -281,23 +282,24 @@ function aggregateInventory(list) {
         } else if (r.store_id) {
             // Single store record
             const name = (INV.stores.find(s => s.id === r.store_id) || {}).name || 'Store';
-            const qty = Number(r.qty_on_store || r.qty_on_hand || 0);
+            const qty = Number(r.qty_on_store || 0);
             agg.store_breakdown.push({ store_id: r.store_id, name, qty });
             agg.qty_on_store += qty;
         }
 
-        // Prefer any explicit product-level qty_on_hand seen
-        if (typeof r.qty_on_hand !== 'undefined' && Number(r.qty_on_hand) > 0) {
+        // Keep product-level qty_on_hand
+        if (typeof r.qty_on_hand !== 'undefined') {
             agg.qty_on_hand = Number(r.qty_on_hand);
         }
         // Track most recent update
-        if (r.last_updated && (!agg.last_updated || new Date(r.last_updated) > new Date(agg.last_updated))) agg.last_updated = r.last_updated;
+        if (r.last_updated && (!agg.last_updated || new Date(r.last_updated) > new Date(agg.last_updated))) {
+            agg.last_updated = r.last_updated;
+        }
     }
 
-    // For aggregated rows, if qty_on_hand is zero but we have assigned quantities, set on_hand to sum of assigns
     const out = [];
     for (const v of m.values()) {
-        if (!v.qty_on_hand && v.qty_on_store) v.qty_on_hand = v.qty_on_store;
+        v.total_pcs = Number(v.qty_on_hand || 0) + Number(v.qty_on_store || 0);
         out.push(v);
     }
     return out;
@@ -346,22 +348,22 @@ function toggleStoreHidden(safeKey, btn) {
     }
 }
 
-// Update total assigned and remaining shown in the item modal
+// Update total assigned and total pcs shown in the item modal
 function updateAssignTotals() {
     const handEl = document.getElementById('invQtyOnHand');
     const assigns = collectStoreAssignRows();
     const totalAssigned = assigns.reduce((s, a) => s + (Number(a.qty) || 0), 0);
 
-    let hand = handEl ? Number(handEl.value || 0) : 0;
-    if (handEl && hand < totalAssigned) {
-        handEl.value = String(totalAssigned);
-        hand = totalAssigned;
-    }
-    const remaining = Math.max(0, hand - totalAssigned);
-    const totalEl = document.getElementById('invTotalAssigned');
-    const remEl = document.getElementById('invRemaining');
-    if (totalEl) totalEl.textContent = String(totalAssigned);
-    if (remEl) remEl.textContent = String(remaining);
+    const hand = handEl ? Math.max(0, parseInt(handEl.value || '0', 10) || 0) : 0;
+    const totalPcs = hand + totalAssigned;
+
+    const handSpan = document.getElementById('invSummaryOnHand');
+    const storeSpan = document.getElementById('invSummaryOnStore');
+    const totalSpan = document.getElementById('invSummaryTotalPcs');
+
+    if (handSpan) handSpan.textContent = String(hand);
+    if (storeSpan) storeSpan.textContent = String(totalAssigned);
+    if (totalSpan) totalSpan.textContent = String(totalPcs);
 }
 
 // Prevent the same store being selected twice across assign rows
@@ -614,15 +616,29 @@ async function loadInventory(storeId) {
     }
 }
 
+// ── Inventory Export ───────────────────────────────────────────────────────
+function exportInventory(fmt) {
+    const storeId = INV.selectedStoreId || '';
+    const search = encodeURIComponent(INV.searchQuery || '');
+    const url = `/api/inventory/export/${fmt}?store_id=${storeId}&search=${search}`;
+
+    if (fmt === 'pdf') {
+        window.open(url, '_blank');
+    } else {
+        invToast('Preparing Excel export...', 'info');
+        window.location.href = url;
+    }
+}
+
 function applyFilter() {
     const q = INV.searchQuery;
     if (!q) {
         INV.filteredInventory = [...INV.inventory];
     } else {
         INV.filteredInventory = INV.inventory.filter(r =>
-            (r.name  || '').toLowerCase().includes(q) ||
-            (r.category || '').toLowerCase().includes(q) ||
-            (r.unit  || '').toLowerCase().includes(q)
+            (r.name || '').toLowerCase().includes(q) ||
+            (r.description || '').toLowerCase().includes(q) ||
+            (r.sku || '').toLowerCase().includes(q)
         );
     }
     // reset to first page on filter change
@@ -637,7 +653,7 @@ function renderInventoryTable() {
 
     if (INV.filteredInventory.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="9">
+            <tr><td colspan="7">
                 <div class="inv-empty-state">
                     <div class="inv-empty-icon"><i class="fa-solid fa-box-open"></i></div>
                     <h4>${INV.searchQuery ? 'No Results Found' : 'No Items Yet'}</h4>
@@ -728,7 +744,6 @@ function renderInventoryTable() {
                 <div class="inv-item-name">${escHtml(r.name)}</div>
                 ${r.description ? `<div class="inv-item-desc">${escHtml(r.description)}</div>` : ''}
             </td>
-            <td><span class="inv-unit-badge">${escHtml(r.unit || 'pcs')}</span></td>
             <td><span class="inv-qty inv-qty-hand">${r.qty_on_hand}</span></td>
             <td>${storeColContent}</td>
             <td><span class="inv-qty inv-qty-total">${totalPcs}</span></td>
@@ -879,14 +894,14 @@ function updateTableHeader(storeName) {
 function updateStats() {
     const totalStores = INV.stores.filter(s => s.status === 'active').length;
     const totalItems = INV.items.length;
-    const totalRecords = INV.inventory.length;
-    const totalOnHand = INV.inventory.reduce((sum, r) => sum + (r.qty_on_hand || 0), 0);
+    const totalOnHand = INV.inventory.reduce((sum, r) => sum + (Number(r.qty_on_hand) || 0), 0);
+    const totalOnStore = INV.inventory.reduce((sum, r) => sum + (Number(r.qty_on_store) || 0), 0);
 
     const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
     el('statTotalStores', totalStores);
     el('statTotalItems', totalItems);
-    el('statTotalRecords', totalRecords);
     el('statTotalOnHand', totalOnHand);
+    el('statTotalOnStore', totalOnStore);
 }
 
 // ── Add / Edit Item Modal ─────────────────────────────────────────────────
@@ -904,8 +919,6 @@ function openAddItemModal() {
 
     // Reset form fields
     const elName = document.getElementById('invItemName'); if (elName) elName.value = '';
-    const elCat = document.getElementById('invItemCategory'); if (elCat) elCat.value = '';
-    const elUnit = document.getElementById('invItemUnit'); if (elUnit) elUnit.value = 'pcs';
     const elDesc = document.getElementById('invItemDesc'); if (elDesc) elDesc.value = '';
     const elHand = document.getElementById('invQtyOnHand'); if (elHand) elHand.value = '0';
 
@@ -947,7 +960,7 @@ function openEditInvModal(invId) {
     INV.editingInvId = normId || invId;
     INV.editingItemId = itemId;
 
-    const titleEl = document.getElementById('itemModalTitle'); if (titleEl) titleEl.textContent = 'Edit Item & Store Assignments';
+    const titleEl = document.getElementById('itemModalTitle'); if (titleEl) titleEl.textContent = 'Edit Item & Store Allocations';
     const iconEl = document.getElementById('itemModalIcon'); if (iconEl) iconEl.className = 'fa-solid fa-pen-to-square';
 
     // Show name section so user can edit item details or store assignments
@@ -957,7 +970,6 @@ function openEditInvModal(invId) {
     if (editDisplay) editDisplay.style.display = 'none';
 
     const elName = document.getElementById('invItemName'); if (elName) elName.value = rec.name || '';
-    const elUnit = document.getElementById('invItemUnit'); if (elUnit) elUnit.value = rec.unit || 'pcs';
     const elDesc = document.getElementById('invItemDesc'); if (elDesc) elDesc.value = rec.description || '';
     const elHand = document.getElementById('invQtyOnHand'); if (elHand) elHand.value = (rec.qty_on_hand || 0);
 
@@ -973,7 +985,7 @@ function openEditInvModal(invId) {
             }));
             renderStoreAssignRows(assigns);
         } else if (rec.store_id) {
-            addStoreAssignRow({ store_id: rec.store_id, qty: rec.qty_on_store || rec.qty_on_hand || 0 });
+            addStoreAssignRow({ store_id: rec.store_id, qty: rec.qty_on_store || 0 });
         } else {
             addStoreAssignRow();
         }
@@ -993,25 +1005,24 @@ async function saveNewItem() {
 
     const nameEl = document.getElementById('invItemName');
     const name = nameEl ? (nameEl.value || '').trim() : '';
-    const unitEl = document.getElementById('invItemUnit');
-    const unit = unitEl ? unitEl.value : 'pcs';
     const descEl = document.getElementById('invItemDesc');
     const desc = descEl ? (descEl.value || '').trim() : '';
 
     const qtyOnHandEl  = document.getElementById('invQtyOnHand');
-    const qtyOnHand  = qtyOnHandEl ? qtyOnHandEl.value : '0';
+    const qtyOnHandVal = qtyOnHandEl ? qtyOnHandEl.value : '0';
 
     let valid = true;
     if (!name) {
         invShowError('invItemName', 'invItemNameErr', 'Item name is required.');
         valid = false;
     }
-    if (qtyOnHand === '' || isNaN(Number(qtyOnHand)) || Number(qtyOnHand) < 0) {
+    if (qtyOnHandVal === '' || isNaN(Number(qtyOnHandVal)) || Number(qtyOnHandVal) < 0) {
         invShowError('invQtyOnHand', 'invQtyOnHandErr', 'Must be a non-negative number.');
         valid = false;
     }
     if (!valid) return;
 
+    const qtyOnHand = Math.max(0, parseInt(qtyOnHandVal, 10) || 0);
     const assignRows = collectStoreAssignRows();
 
     const btn = document.getElementById('btnSaveItem');
@@ -1035,12 +1046,12 @@ async function saveNewItem() {
                 return;
             }
 
-            // Step 1: Update item catalog details (name, unit, description)
+            // Step 1: Update item catalog details (name, description, qty_on_hand)
             const sku = 'AUTO-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
             const itemRes = await fetch(`/api/inventory/items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, unit, description: desc, sku })
+                body: JSON.stringify({ name, description: desc, qty_on_hand: qtyOnHand, sku })
             });
             if (!itemRes.ok) {
                 const itemData = await itemRes.json().catch(() => ({}));
@@ -1053,13 +1064,13 @@ async function saveNewItem() {
             const assignRes = await fetch(`/api/inventory/items/${itemId}/store-assignments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ assignments: assignRows })
+                body: JSON.stringify({ assignments: assignRows, qty_on_hand: qtyOnHand })
             });
             if (!assignRes.ok) {
                 const assignData = await assignRes.json().catch(() => ({}));
                 invToast(assignData.error || 'Failed to update store assignments.', 'error');
             } else {
-                invToast('Item and store assignments updated successfully!', 'success');
+                invToast('Item and store allocations updated successfully!', 'success');
                 closeModal('itemModal');
                 await loadItems();
                 INV.selectedStoreId ? loadInventory(INV.selectedStoreId) : loadAllItems();
@@ -1071,7 +1082,7 @@ async function saveNewItem() {
             const itemRes = await fetch('/api/inventory/items', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, sku, unit, description: desc })
+                body: JSON.stringify({ name, sku, description: desc, qty_on_hand: qtyOnHand })
             });
             const itemData = await itemRes.json();
             if (!itemRes.ok) {
@@ -1085,7 +1096,7 @@ async function saveNewItem() {
             const assignRes = await fetch(`/api/inventory/items/${newItemId}/store-assignments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ assignments: assignRows })
+                body: JSON.stringify({ assignments: assignRows, qty_on_hand: qtyOnHand })
             });
             if (!assignRes.ok) {
                 invToast('Item created, but store assignments failed.', 'warning');
@@ -1150,14 +1161,14 @@ function renderItemCatalog() {
     const tbody = document.getElementById('itemCatalogTbody');
     if (!tbody) return;
     if (INV.items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding:2rem;text-align:center;color:var(--text-muted);">No items in catalog yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:2rem;text-align:center;color:var(--text-muted);">No items in catalog yet.</td></tr>`;
         return;
     }
     tbody.innerHTML = INV.items.map(it => `
         <tr>
             <td><strong>${escHtml(it.name)}</strong></td>
-            <td>${it.category ? `<span class="inv-category-badge">${escHtml(it.category)}</span>` : '—'}</td>
-            <td><span class="inv-unit-badge">${escHtml(it.unit || 'pcs')}</span></td>
+            <td>${escHtml(it.description || '—')}</td>
+            <td><span class="inv-qty inv-qty-hand">${it.qty_on_hand || 0}</span></td>
             <td>
                 <div style="display:flex;gap:6px;">
                     <button class="btn-inv-edit" onclick="openEditItemCatalogModal(${it.id})"><i class="fa-solid fa-pen"></i> Edit</button>
@@ -1174,8 +1185,6 @@ function openNewItemCatalogModal() {
     editingCatalogItemId = null;
     document.getElementById('catalogItemModalTitle').textContent = 'Create New Item';
     document.getElementById('catItemName').value = '';
-    document.getElementById('catItemCategory').value = '';
-    document.getElementById('catItemUnit').value = 'pcs';
     document.getElementById('catItemDesc').value = '';
     invClearErrors('catalogItemForm');
     closeModal('itemCatalogModal');
@@ -1188,8 +1197,6 @@ function openEditItemCatalogModal(itemId) {
     editingCatalogItemId = itemId;
     document.getElementById('catalogItemModalTitle').textContent = 'Edit Item';
     document.getElementById('catItemName').value = item.name;
-    document.getElementById('catItemCategory').value = item.category || '';
-    document.getElementById('catItemUnit').value = item.unit || 'pcs';
     document.getElementById('catItemDesc').value = item.description || '';
     invClearErrors('catalogItemForm');
     closeModal('itemCatalogModal');
@@ -1199,8 +1206,6 @@ function openEditItemCatalogModal(itemId) {
 async function saveCatalogItem() {
     invClearErrors('catalogItemForm');
     const name     = document.getElementById('catItemName').value.trim();
-    const category = document.getElementById('catItemCategory').value.trim();
-    const unit     = document.getElementById('catItemUnit').value.trim() || 'pcs';
     const description = document.getElementById('catItemDesc').value.trim();
 
     // Auto-generate SKU
@@ -1220,7 +1225,7 @@ async function saveCatalogItem() {
         const res = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, sku, category, unit, description })
+            body: JSON.stringify({ name, sku, description })
         });
         const data = await res.json();
         if (!res.ok) {

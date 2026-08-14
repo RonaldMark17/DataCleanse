@@ -88,12 +88,12 @@
             <div><div class="inv-stat-value" id="statTotalItems">0</div><div class="inv-stat-label">Item Catalog</div></div>
         </div>
         <div class="inv-stat-card">
-            <div class="inv-stat-icon inv-stat-icon-blue"><i class="fa-solid fa-cubes-stacked"></i></div>
-            <div><div class="inv-stat-value" id="statTotalRecords">0</div><div class="inv-stat-label">Store Records</div></div>
-        </div>
-        <div class="inv-stat-card">
             <div class="inv-stat-icon inv-stat-icon-amber"><i class="fa-solid fa-cubes"></i></div>
             <div><div class="inv-stat-value" id="statTotalOnHand">0</div><div class="inv-stat-label">Total On Hand</div></div>
+        </div>
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon inv-stat-icon-blue"><i class="fa-solid fa-cubes-stacked"></i></div>
+            <div><div class="inv-stat-value" id="statTotalOnStore">0</div><div class="inv-stat-label">Total On Store</div></div>
         </div>
     </div>
 
@@ -110,7 +110,15 @@
         <div class="inv-toolbar-right">
             <div class="inv-search-wrap">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="invSearchInput" class="inv-search-input" placeholder="Search items, category..." autocomplete="off">
+                <input type="text" id="invSearchInput" class="inv-search-input" placeholder="Search items..." autocomplete="off">
+            </div>
+            <div class="inv-export-btn-group">
+                <button type="button" class="btn-inv-export btn-inv-export-excel" onclick="exportInventory('excel')" id="btnExportExcel" title="Download inventory data as Excel (.xlsx)">
+                    <i class="fa-solid fa-file-excel"></i> Export Excel
+                </button>
+                <button type="button" class="btn-inv-export btn-inv-export-pdf" onclick="exportInventory('pdf')" id="btnExportPdf" title="Open executive inventory report as PDF (.pdf)">
+                    <i class="fa-solid fa-file-pdf"></i> Export PDF
+                </button>
             </div>
             <button class="btn-inv-add btn-inv-add-item" onclick="openAddItemModal()" id="btnAddItem">
                 <i class="fa-solid fa-plus"></i> Add Item
@@ -131,14 +139,13 @@
                         <th class="inv-th-sort" onclick="invSetSort('name')" id="th-name">
                             Item Name <span class="inv-sort-icon" id="si-name"><i class="fa-solid fa-sort"></i></span>
                         </th>
-                        <th>Unit</th>
-                        <th class="inv-th-sort" onclick="invSetSort('qty_on_hand')" id="th-qty_on_hand">
+                        <th class="inv-th-sort" onclick="invSetSort('qty_on_hand')" id="th-qty_on_hand" title="The quantity of items currently available in the main inventory.">
                             On Hand <span class="inv-sort-icon" id="si-qty_on_hand"><i class="fa-solid fa-sort"></i></span>
                         </th>
-                        <th class="inv-th-sort" onclick="invSetSort('qty_on_store')" id="th-qty_on_store">
+                        <th class="inv-th-sort" onclick="invSetSort('qty_on_store')" id="th-qty_on_store" title="The quantity of items allocated or distributed to each store.">
                             On Store <span class="inv-sort-icon" id="si-qty_on_store"><i class="fa-solid fa-sort"></i></span>
                         </th>
-                        <th class="inv-th-sort" onclick="invSetSort('total_pcs')" id="th-total_pcs">
+                        <th class="inv-th-sort" onclick="invSetSort('total_pcs')" id="th-total_pcs" title="The fixed total quantity of the item, calculated as Item on Hand + Item on Store.">
                             Total Pcs <span class="inv-sort-icon" id="si-total_pcs"><i class="fa-solid fa-sort"></i></span>
                         </th>
                         <th class="inv-th-sort" onclick="invSetSort('stock_alert')" id="th-stock_alert">
@@ -151,7 +158,7 @@
                     </tr>
                 </thead>
                 <tbody id="invTbody">
-                    <tr><td colspan="9"><div class="inv-empty-state">
+                    <tr><td colspan="7"><div class="inv-empty-state">
                         <div class="inv-empty-icon"><i class="fa-solid fa-box-open"></i></div>
                         <h4>No Items Yet</h4>
                         <p>Click <strong>+ Add Item</strong> to add your first inventory item.</p>
@@ -229,30 +236,6 @@
                         <input type="text" id="invItemName" class="inv-form-control" placeholder="e.g. Ballpoint Pen" maxlength="120" autocomplete="off">
                         <span class="inv-field-error" id="invItemNameErr"><i class="fa-solid fa-circle-exclamation"></i></span>
                     </div>
-                    <div class="inv-form-row">
-                        <div class="inv-form-group">
-                            <label for="invItemUnit">Unit of Measure</label>
-                            <select id="invItemUnit" class="inv-form-control">
-                                <option value="pcs">pcs (pieces)</option>
-                                <option value="box">box</option>
-                                <option value="pack">pack</option>
-                                <option value="kg">kg</option>
-                                <option value="g">g</option>
-                                <option value="L">L (liter)</option>
-                                <option value="mL">mL</option>
-                                <option value="m">m (meter)</option>
-                                <option value="ft">ft (feet)</option>
-                                <option value="set">set</option>
-                                <option value="pair">pair</option>
-                                <option value="roll">roll</option>
-                                <option value="ream">ream</option>
-                                <option value="bottle">bottle</option>
-                                <option value="can">can</option>
-                                <option value="bag">bag</option>
-                                <option value="unit">unit</option>
-                            </select>
-                        </div>
-                    </div>
 
                     <div class="inv-form-group">
                         <label for="invItemDesc">Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
@@ -270,13 +253,16 @@
                 </div>
                 <hr class="inv-section-sep">
                 <div class="inv-form-group" style="margin-bottom:1.1rem;">
-                    <label for="invQtyOnHand">Quantity on Hand <span class="req">*</span></label>
+                    <label for="invQtyOnHand">Quantity on Hand (Main Inventory) <span class="req">*</span></label>
                     <input type="number" id="invQtyOnHand" class="inv-form-control" min="0" step="1" value="0" required>
+                    <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">
+                        The quantity of items currently available in the main inventory.
+                    </small>
                     <span class="inv-field-error" id="invQtyOnHandErr"><i class="fa-solid fa-circle-exclamation"></i></span>
                 </div>
-                <div class="inv-section-label">Designate Store <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(optional)</span></div>
+                <div class="inv-section-label">Designate Store Allocation <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(optional)</span></div>
                 <div class="inv-form-group" style="margin-bottom:1rem;">
-                    <label for="invStoreAssign">Assign to Store</label>
+                    <label for="invStoreAssign" style="display:none;">Assign to Store</label>
                     <select id="invStoreAssign" class="inv-form-control" style="display:none;">
                         <option value="">— No Store / Keep as catalog item —</option>
                     </select>
@@ -284,16 +270,17 @@
                         <!-- Dynamic per-store rows inserted here by JS -->
                     </div>
                     <div class="inv-assign-summary" id="invAssignSummary" style="display:block;">
-                        <div>Total Assigned: <span id="invTotalAssigned">0</span></div>
-                        <div>Remaining: <span id="invRemaining" class="inv-remaining">0</span></div>
+                        <div>On Hand: <span id="invSummaryOnHand" style="font-weight:700;color:var(--accent-emerald);">0</span></div>
+                        <div>On Store: <span id="invSummaryOnStore" style="font-weight:700;color:var(--accent-amber);">0</span></div>
+                        <div>Total Pcs: <span id="invSummaryTotalPcs" class="inv-remaining" style="color:#a5b4fc;">0</span> <small style="color:var(--text-muted);font-weight:normal;">(On Hand + On Store)</small></div>
                     </div>
                     <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
                         <button type="button" class="btn-inv-add" onclick="addStoreAssignRow()"><i class="fa-solid fa-plus"></i> Add Store</button>
-                        <small style="color:var(--text-muted);font-size:0.74rem;margin-left:6px;">Add one or more store assignments for this item.</small>
+                        <small style="color:var(--text-muted);font-size:0.74rem;margin-left:6px;">Add store allocations for this item.</small>
                     </div>
                     <small style="color:var(--text-muted);font-size:0.74rem;margin-top:4px;display:block;">
                         <i class="fa-solid fa-circle-info"></i>
-                        Leave blank to add to the item catalog only. Add store rows to assign quantities to specific stores.
+                        Item on Hand + Item on Store = Total Pcs.
                     </small>
                 </div>
                 <hr class="inv-section-sep">
